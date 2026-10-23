@@ -24,3 +24,17 @@ Vec3 carShader(const Fragment& f, const Uniforms& u) {
     Vec3 color = m.color * (ambient + diffuse) + Vec3{1, 1, 1} * spec + rimColor * rim;
     return lerp(color, m.color, m.emissive);
 }
+
+Vec3 sunShader(const Fragment& f, const Uniforms& u) {
+    Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
+    float facing = std::max(0.0f, dot(f.normal, toCamera)); // 1 en el centro, 0 en el borde
+    Vec3 edge{1.0f, 0.35f, 0.05f};
+    Vec3 center{1.0f, 0.95f, 0.7f};
+    return lerp(edge, center, std::pow(facing, 0.6f));
+}
+
+Vec3 planetShader(const Fragment& f, const Uniforms& u) {
+    Vec3 toLight = normalize(u.lightPos - f.worldPos);
+    float diffuse = std::max(0.0f, dot(f.normal, toLight));
+    return f.material->color * (0.06f + diffuse);
+}
