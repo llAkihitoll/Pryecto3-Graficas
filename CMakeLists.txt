@@ -15,9 +15,11 @@ find_package(SDL2 REQUIRED)
 add_executable(galaxia
     src/main.cpp
     src/framebuffer.cpp
+    src/geometry.cpp
     src/mesh.cpp
     src/obj_loader.cpp
     src/renderer.cpp
+    src/scene.cpp
     src/shaders.cpp
 )
 
