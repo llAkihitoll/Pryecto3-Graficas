@@ -14,13 +14,16 @@ find_package(SDL2 REQUIRED)
 
 add_executable(galaxia
     src/main.cpp
+    src/camera.cpp
     src/framebuffer.cpp
     src/geometry.cpp
+    src/hud.cpp
     src/mesh.cpp
     src/obj_loader.cpp
     src/renderer.cpp
     src/scene.cpp
     src/shaders.cpp
+    src/ship.cpp
 )
 
 target_include_directories(galaxia PRIVATE ${SDL2_INCLUDE_DIRS})

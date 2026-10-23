@@ -2,11 +2,14 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include "camera.h"
 #include "framebuffer.h"
+#include "hud.h"
 #include "obj_loader.h"
 #include "renderer.h"
 #include "scene.h"
 #include "shaders.h"
+#include "ship.h"
 
 // Resolucion interna del framebuffer. La ventana es mas grande y SDL solo
 // estira la imagen ya terminada al mostrarla.
@@ -47,22 +50,93 @@ bool loadCar(const std::string& path, Mesh& mesh) {
     return true;
 }
 
+// Convierte una cadena de teclas simuladas ("wa", "wb", ...) en entrada.
+// Solo se usa para pruebas sin ventana: w s a d q e, i/k = flechas arriba/abajo,
+// b = boost, x = freno fuerte.
+ShipInput inputFromString(const std::string& keys) {
+    ShipInput in;
+    for (char k : keys) {
+        if (k == 'w') in.throttle += 1;
+        if (k == 's') in.throttle -= 1;
+        if (k == 'a') in.steer += 1;
+        if (k == 'd') in.steer -= 1;
+        if (k == 'i') in.pitch += 1;
+        if (k == 'k') in.pitch -= 1;
+        if (k == 'e') in.roll += 1;
+        if (k == 'q') in.roll -= 1;
+        if (k == 'b') in.boost = true;
+        if (k == 'x') in.brake = true;
+    }
+    return in;
+}
+
+ShipInput readKeyboard() {
+    const Uint8* k = SDL_GetKeyboardState(nullptr);
+    ShipInput in;
+    in.throttle = (float)k[SDL_SCANCODE_W] - (float)k[SDL_SCANCODE_S];
+    in.steer = (float)k[SDL_SCANCODE_A] - (float)k[SDL_SCANCODE_D];
+    in.pitch = (float)k[SDL_SCANCODE_UP] - (float)k[SDL_SCANCODE_DOWN];
+    in.roll = (float)k[SDL_SCANCODE_E] - (float)k[SDL_SCANCODE_Q];
+    in.boost = k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_RSHIFT];
+    in.brake = k[SDL_SCANCODE_SPACE];
+    return in;
+}
+
+Ship makeStartShip(const Scene& scene, float time) {
+    Ship ship;
+    ship.position = CAR_START;
+    ship.lookAt(scene.bodies[1].position(time)); // arranca mirando al planeta
+    return ship;
+}
+
+// Prueba de consistencia: el mismo recorrido de 6 s (acelerar, girar, boost,
+// frenar) simulado a distintos FPS debe terminar en el mismo lugar. Se cuentan
+// cuadros enteros para que el cambio de teclas caiga en el mismo instante.
+void runDtTest(const Scene& scene) {
+    const int fpsList[] = {20, 30, 60, 144, 240};
+    for (int fps : fpsList) {
+        Ship ship = makeStartShip(scene, 0.0f);
+        float frame = 1.0f / fps;
+        for (int i = 0; i < 6 * fps; ++i) {
+            float t = (float)i / fps;
+            const char* keys = t < 2.0f ? "w" : (t < 3.5f ? "wa" : (t < 5.0f ? "wbi" : "x"));
+            ship.update(inputFromString(keys), frame);
+        }
+        std::printf("%3d FPS -> posicion (%.3f, %.3f, %.3f)  velocidad %.3f\n", fps,
+                    ship.position.x, ship.position.y, ship.position.z, length(ship.velocity));
+    }
+}
+
 int main(int argc, char* argv[]) {
-    // Opciones para pruebas: --screenshot archivo.png guarda un cuadro y
-    // termina; --yaw/--pitch/--dist colocan la camara; --lod usa el modelo
-    // reducido; --time adelanta la simulacion (segundos).
+    // Opciones para pruebas:
+    //   --screenshot archivo.png  guarda un cuadro y termina
+    //   --time s                  adelanta la simulacion de los planetas
+    //   --fly s --keys "wb"       antes de la captura, vuela s segundos con esas teclas
+    //   --look yaw pitch          vista libre de la camara (grados)
+    //   --lod                     usa el modelo reducido del carro
+    //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
-    // Angulos de la camara relativos al carro: yaw = 0 es justo detras.
-    float yaw = 0.0f, pitch = radians(12.0f), distance = 5.0f;
-    bool useLod = false;
-    float elapsed = 0.0f;
+    float elapsed = 0.0f, flySeconds = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
+    std::string flyKeys;
+    bool useLod = false, dtTest = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
-        else if (std::strcmp(argv[i], "--yaw") == 0 && i + 1 < argc) yaw = radians((float)std::atof(argv[++i]));
-        else if (std::strcmp(argv[i], "--pitch") == 0 && i + 1 < argc) pitch = radians((float)std::atof(argv[++i]));
-        else if (std::strcmp(argv[i], "--dist") == 0 && i + 1 < argc) distance = (float)std::atof(argv[++i]);
-        else if (std::strcmp(argv[i], "--lod") == 0) useLod = true;
         else if (std::strcmp(argv[i], "--time") == 0 && i + 1 < argc) elapsed = (float)std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--fly") == 0 && i + 1 < argc) flySeconds = (float)std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--keys") == 0 && i + 1 < argc) flyKeys = argv[++i];
+        else if (std::strcmp(argv[i], "--look") == 0 && i + 2 < argc) {
+            lookYawDeg = (float)std::atof(argv[++i]);
+            lookPitchDeg = (float)std::atof(argv[++i]);
+        }
+        else if (std::strcmp(argv[i], "--lod") == 0) useLod = true;
+        else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
+    }
+
+    Scene scene;
+    scene.build();
+    if (dtTest) {
+        runDtTest(scene);
+        return 0;
     }
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -75,9 +149,6 @@ int main(int argc, char* argv[]) {
         SDL_Quit();
         return 1;
     }
-
-    Scene scene;
-    scene.build();
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     SDL_Window* window = SDL_CreateWindow("Proyecto 3 - Galaxia", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -97,13 +168,24 @@ int main(int argc, char* argv[]) {
     Uniforms u;
     u.projection = perspective(radians(FOV_DEG), (float)RENDER_WIDTH / RENDER_HEIGHT, Z_NEAR, Z_FAR);
 
+    Ship ship = makeStartShip(scene, elapsed);
+    ChaseCamera camera;
+    camera.snapTo(ship);
+
+    // Modo de prueba: simula el vuelo con pasos de 1/60 s antes de la captura.
+    if (screenshotPath && flySeconds > 0.0f) {
+        ShipInput in = inputFromString(flyKeys);
+        for (float t = 0.0f; t < flySeconds; t += 1.0f / 60.0f) {
+            ship.update(in, 1.0f / 60.0f);
+            camera.update(ship, 1.0f / 60.0f, false, 0, 0);
+            elapsed += 1.0f / 60.0f;
+        }
+    }
+    camera.lookYaw = radians(lookYawDeg);
+    camera.lookPitch = radians(lookPitchDeg);
+    if (screenshotPath) camera.snapTo(ship);
+
     RenderStats stats;
-    bool spin = false;
-    Vec3 carPos = CAR_START;
-    // El modelo mira hacia -Z; rotateY(a) lo hace mirar a (-sin a, 0, -cos a).
-    // Se elige el angulo para que arranque mirando al planeta.
-    Vec3 toPlanet = scene.bodies[1].position(elapsed) - carPos;
-    float carAngle = std::atan2(-toPlanet.x, -toPlanet.z);
 
     // Para el titulo de la ventana: promedio de FPS cada medio segundo.
     float titleTimer = 0.0f;
@@ -118,44 +200,41 @@ int main(int argc, char* argv[]) {
         float dt = (float)(now - last) / (float)SDL_GetPerformanceFrequency();
         last = now;
         if (dt > 0.1f) dt = 0.1f; // evita saltos enormes si la ventana se congela
+        if (screenshotPath) dt = 0.0f;
         elapsed += dt;
 
+        float mouseDx = 0, mouseDy = 0;
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = false;
+            if (event.type == SDL_MOUSEMOTION) {
+                mouseDx += (float)event.motion.xrel;
+                mouseDy += (float)event.motion.yrel;
+            }
             if (event.type == SDL_KEYDOWN) {
                 switch (event.key.keysym.sym) {
                     case SDLK_ESCAPE: running = false; break;
                     case SDLK_l: useLod = !useLod; break;
                     case SDLK_b: u.cullBackFaces = !u.cullBackFaces; break;
-                    case SDLK_r: spin = !spin; break;
+                    case SDLK_r:
+                        ship = makeStartShip(scene, elapsed);
+                        camera.snapTo(ship);
+                        break;
                     case SDLK_p:
                         if (fb.savePNG("captura.png")) std::printf("Captura guardada en captura.png\n");
                         break;
                 }
             }
-            if (event.type == SDL_MOUSEWHEEL) distance *= event.wheel.y > 0 ? 0.9f : 1.1f;
+        }
+        bool looking = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
+
+        if (!screenshotPath) {
+            ship.update(readKeyboard(), dt);
+            camera.update(ship, dt, looking, mouseDx, mouseDy);
         }
 
-        // Camara orbital alrededor del carro (temporal, hasta la fase de controles).
-        // Con la distancia maxima se alcanza a ver todo el sistema.
-        const Uint8* keys = SDL_GetKeyboardState(nullptr);
-        const float orbitSpeed = 1.5f; // radianes por segundo
-        if (keys[SDL_SCANCODE_LEFT]) yaw -= orbitSpeed * dt;
-        if (keys[SDL_SCANCODE_RIGHT]) yaw += orbitSpeed * dt;
-        if (keys[SDL_SCANCODE_UP]) pitch += orbitSpeed * dt;
-        if (keys[SDL_SCANCODE_DOWN]) pitch -= orbitSpeed * dt;
-        if (keys[SDL_SCANCODE_EQUALS] || keys[SDL_SCANCODE_KP_PLUS]) distance *= 1.0f - 1.5f * dt;
-        if (keys[SDL_SCANCODE_MINUS] || keys[SDL_SCANCODE_KP_MINUS]) distance *= 1.0f + 1.5f * dt;
-        pitch = clampf(pitch, radians(-85.0f), radians(85.0f));
-        distance = clampf(distance, 0.3f, 800.0f);
-        if (spin) carAngle += 0.6f * dt;
-
-        float camYaw = carAngle + yaw;
-        Vec3 eye = carPos + Vec3{distance * std::cos(pitch) * std::sin(camYaw), distance * std::sin(pitch),
-                                 distance * std::cos(pitch) * std::cos(camYaw)};
-        u.cameraPos = eye;
-        u.view = lookAt(eye, carPos, Vec3{0, 1, 0});
+        u.cameraPos = camera.eye;
+        u.view = camera.view();
         u.time = elapsed;
         u.lightPos = scene.sunPosition(elapsed);
 
@@ -164,14 +243,20 @@ int main(int argc, char* argv[]) {
         stats.reset();
         scene.drawStars(fb, u);
         scene.drawBodies(fb, u, stats);
-        u.model = translate(carPos) * rotateY(carAngle);
+        u.model = ship.modelMatrix();
         drawMesh(fb, useLod ? carLod : carFull, u, carShader, stats);
+
+        // HUD: velocidad (cian) y boost (naranja) en la esquina inferior izquierda.
+        float speed = length(ship.velocity);
+        drawBar(fb, 16, RENDER_HEIGHT - 34, 160, 8, speed / ship.tuning.maxBoostSpeed, 0xFF3CC8FF);
+        drawBar(fb, 16, RENDER_HEIGHT - 20, 160, 8, ship.boostFuel / ship.tuning.boostCapacity,
+                ship.boosting ? 0xFFFFE070 : 0xFFFF8A20);
         double frameMs = 1000.0 * (SDL_GetPerformanceCounter() - frameStart) / SDL_GetPerformanceFrequency();
 
         if (screenshotPath) {
             fb.savePNG(screenshotPath);
-            std::printf("%s: render %.1f ms, triangulos enviados %d, rasterizados %d, pixeles %lld\n",
-                        screenshotPath, frameMs, stats.trianglesIn, stats.trianglesDrawn, stats.pixelsShaded);
+            std::printf("%s: render %.1f ms, triangulos enviados %d, rasterizados %d | velocidad %.1f, boost %.2f s\n",
+                        screenshotPath, frameMs, stats.trianglesIn, stats.trianglesDrawn, speed, ship.boostFuel);
             running = false;
         }
 
@@ -180,10 +265,11 @@ int main(int argc, char* argv[]) {
         framesCounted++;
         titleTimer += dt;
         if (titleTimer >= 0.5f) {
-            char title[160];
-            std::snprintf(title, sizeof(title), "Proyecto 3 - Galaxia | %.0f FPS | %s | tris %d / raster %d | culling %s",
-                          framesCounted / titleTimer, useLod ? "LOD" : "completo", stats.trianglesIn,
-                          stats.trianglesDrawn, u.cullBackFaces ? "si" : "no");
+            char title[200];
+            std::snprintf(title, sizeof(title),
+                          "Proyecto 3 - Galaxia | %.0f FPS | velocidad %.1f | boost %.0f%% | tris %d / raster %d",
+                          framesCounted / titleTimer, speed, 100.0f * ship.boostFuel / ship.tuning.boostCapacity,
+                          stats.trianglesIn, stats.trianglesDrawn);
             SDL_SetWindowTitle(window, title);
             titleTimer = 0.0f;
             framesCounted = 0;
