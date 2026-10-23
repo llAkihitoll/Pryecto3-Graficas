@@ -5,6 +5,7 @@
 #include "framebuffer.h"
 #include "obj_loader.h"
 #include "renderer.h"
+#include "scene.h"
 #include "shaders.h"
 
 // Resolucion interna del framebuffer. La ventana es mas grande y SDL solo
@@ -17,6 +18,10 @@ const int WINDOW_HEIGHT = 720;
 const float FOV_DEG = 60.0f;
 const float Z_NEAR = 0.05f;
 const float Z_FAR = 5000.0f;
+
+// Donde empieza el carro: a un lado del planeta, con el sol de costado
+// para que se vea el lado de dia y el de noche.
+const Vec3 CAR_START{-70.0f, 8.0f, 90.0f};
 
 // Ajusta como reacciona cada material del Fennec a la luz.
 void setupCarMaterials(Mesh& car) {
@@ -44,17 +49,20 @@ bool loadCar(const std::string& path, Mesh& mesh) {
 
 int main(int argc, char* argv[]) {
     // Opciones para pruebas: --screenshot archivo.png guarda un cuadro y
-    // termina; --yaw/--pitch/--dist colocan la camara; --lod usa el modelo reducido.
+    // termina; --yaw/--pitch/--dist colocan la camara; --lod usa el modelo
+    // reducido; --time adelanta la simulacion (segundos).
     const char* screenshotPath = nullptr;
-    // yaw = 0 pone la camara en +Z, detras del carro (el frente mira a -Z).
-    float yaw = radians(215.0f), pitch = radians(20.0f), distance = 2.2f;
+    // Angulos de la camara relativos al carro: yaw = 0 es justo detras.
+    float yaw = 0.0f, pitch = radians(12.0f), distance = 5.0f;
     bool useLod = false;
+    float elapsed = 0.0f;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
         else if (std::strcmp(argv[i], "--yaw") == 0 && i + 1 < argc) yaw = radians((float)std::atof(argv[++i]));
         else if (std::strcmp(argv[i], "--pitch") == 0 && i + 1 < argc) pitch = radians((float)std::atof(argv[++i]));
         else if (std::strcmp(argv[i], "--dist") == 0 && i + 1 < argc) distance = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--lod") == 0) useLod = true;
+        else if (std::strcmp(argv[i], "--time") == 0 && i + 1 < argc) elapsed = (float)std::atof(argv[++i]);
     }
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -67,6 +75,9 @@ int main(int argc, char* argv[]) {
         SDL_Quit();
         return 1;
     }
+
+    Scene scene;
+    scene.build();
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     SDL_Window* window = SDL_CreateWindow("Proyecto 3 - Galaxia", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -85,12 +96,14 @@ int main(int argc, char* argv[]) {
 
     Uniforms u;
     u.projection = perspective(radians(FOV_DEG), (float)RENDER_WIDTH / RENDER_HEIGHT, Z_NEAR, Z_FAR);
-    u.lightPos = Vec3{-30.0f, 25.0f, 20.0f};
 
     RenderStats stats;
     bool spin = false;
-    float carAngle = 0.0f;
-    float elapsed = 0.0f;
+    Vec3 carPos = CAR_START;
+    // El modelo mira hacia -Z; rotateY(a) lo hace mirar a (-sin a, 0, -cos a).
+    // Se elige el angulo para que arranque mirando al planeta.
+    Vec3 toPlanet = scene.bodies[1].position(elapsed) - carPos;
+    float carAngle = std::atan2(-toPlanet.x, -toPlanet.z);
 
     // Para el titulo de la ventana: promedio de FPS cada medio segundo.
     float titleTimer = 0.0f;
@@ -125,6 +138,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Camara orbital alrededor del carro (temporal, hasta la fase de controles).
+        // Con la distancia maxima se alcanza a ver todo el sistema.
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         const float orbitSpeed = 1.5f; // radianes por segundo
         if (keys[SDL_SCANCODE_LEFT]) yaw -= orbitSpeed * dt;
@@ -134,19 +148,23 @@ int main(int argc, char* argv[]) {
         if (keys[SDL_SCANCODE_EQUALS] || keys[SDL_SCANCODE_KP_PLUS]) distance *= 1.0f - 1.5f * dt;
         if (keys[SDL_SCANCODE_MINUS] || keys[SDL_SCANCODE_KP_MINUS]) distance *= 1.0f + 1.5f * dt;
         pitch = clampf(pitch, radians(-85.0f), radians(85.0f));
-        distance = clampf(distance, 0.3f, 50.0f);
+        distance = clampf(distance, 0.3f, 800.0f);
         if (spin) carAngle += 0.6f * dt;
 
-        Vec3 eye{distance * std::cos(pitch) * std::sin(yaw), distance * std::sin(pitch),
-                 distance * std::cos(pitch) * std::cos(yaw)};
+        float camYaw = carAngle + yaw;
+        Vec3 eye = carPos + Vec3{distance * std::cos(pitch) * std::sin(camYaw), distance * std::sin(pitch),
+                                 distance * std::cos(pitch) * std::cos(camYaw)};
         u.cameraPos = eye;
-        u.view = lookAt(eye, Vec3{0, 0, 0}, Vec3{0, 1, 0});
-        u.model = rotateY(carAngle);
+        u.view = lookAt(eye, carPos, Vec3{0, 1, 0});
         u.time = elapsed;
+        u.lightPos = scene.sunPosition(elapsed);
 
         Uint64 frameStart = SDL_GetPerformanceCounter();
         fb.clear();
         stats.reset();
+        scene.drawStars(fb, u);
+        scene.drawBodies(fb, u, stats);
+        u.model = translate(carPos) * rotateY(carAngle);
         drawMesh(fb, useLod ? carLod : carFull, u, carShader, stats);
         double frameMs = 1000.0 * (SDL_GetPerformanceCounter() - frameStart) / SDL_GetPerformanceFrequency();
 
