@@ -1,0 +1,21 @@
+newmtl Alpha Rim
+Kd 0.9063 0.8648 0.5438
+
+newmtl Dieci Tread
+Kd 0.0867 0.0867 0.0867
+
+newmtl Fennec - Body
+Kd 0.0000 0.3928 0.9063
+
+newmtl Fennec Chassis
+Kd 0.1067 0.1050 0.1009
+
+newmtl Headlights
+Kd 1.0000 0.9059 0.9205
+
+newmtl Paint
+Kd 0.0904 0.0904 0.0904
+
+newmtl Window
+Kd 0.0000 0.0000 0.0000
+
