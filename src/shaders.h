@@ -25,3 +25,8 @@ Vec3 glaciaShader(const Fragment& f, const Uniforms& u);
 // Vergel: tierra con relieve, el sol se refleja solo en el agua, una capa de
 // nubes que se mueve sobre la superficie y atmosfera azul en el borde.
 Vec3 vergelShader(const Fragment& f, const Uniforms& u);
+
+// Objetos de superficie: Lambert + brillo con el color del material, luz
+// propia (cristales, la luz de la baliza) y sombra del planeta: si el sol
+// esta debajo del horizonte del objeto, no lo ilumina.
+Vec3 propShader(const Fragment& f, const Uniforms& u);

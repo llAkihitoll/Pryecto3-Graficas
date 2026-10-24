@@ -117,6 +117,25 @@ Vec3 glaciaShader(const Fragment& f, const Uniforms& u) {
     return albedo * (0.05f + 0.9f * diffuse) + Vec3{1, 1, 1} * spec + fresnel + glow;
 }
 
+Vec3 propShader(const Fragment& f, const Uniforms& u) {
+    const Material& m = *f.material;
+    Vec3 toLight = normalize(u.lightPos - f.worldPos);
+    Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
+    Vec3 n = f.normal;
+    if (dot(n, toCamera) < 0) n = -n;
+
+    // Sombra del planeta: se compara el sol con la vertical del lugar.
+    Vec3 vertical = normalize(f.worldPos - u.objectCenter);
+    float day = smoothstep(-0.1f, 0.15f, dot(vertical, toLight));
+
+    float diffuse = std::max(0.0f, dot(n, toLight)) * day;
+    Vec3 half = normalize(toLight + toCamera);
+    float spec = m.specular * std::pow(std::max(0.0f, dot(n, half)), m.shininess) * day;
+    Vec3 lit = m.color * (0.07f + diffuse) + Vec3{spec, spec, spec};
+    // emissive: 0 = solo luz del sol, 1 = brilla con su propio color.
+    return lit + m.color * m.emissive * (0.6f + 0.4f * (1.0f - day));
+}
+
 Vec3 vergelShader(const Fragment& f, const Uniforms& u) {
     Vec3 dir = normalize(f.localPos);
     Vec3 albedo = u.textures->color.sample(dir);

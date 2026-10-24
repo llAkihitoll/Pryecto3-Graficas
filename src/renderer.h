@@ -17,6 +17,7 @@ struct Uniforms {
     // Giro extra para una capa de textura animada (las nubes de Vergel): se
     // calcula una vez por cuadro para no hacer senos y cosenos por pixel.
     Mat4 textureMotion = Mat4::identity();
+    Vec3 objectCenter; // centro del planeta sobre el que estan los objetos de superficie
 };
 
 // Lo que recibe el shader de fragmentos por cada pixel cubierto. worldPos,
@@ -38,6 +39,7 @@ using FragmentShader = Vec3 (*)(const Fragment&, const Uniforms&);
 struct RenderStats {
     int objectsDrawn = 0;   // objetos que pasaron el descarte
     int objectsCulled = 0;  // objetos descartados por estar fuera de la vista
+    int propsDrawn = 0;     // objetos de superficie (rocas, arboles...) dibujados
     int trianglesIn = 0;    // triangulos enviados
     int trianglesDrawn = 0; // triangulos que llegaron a rasterizarse
     long long pixelsShaded = 0;
