@@ -35,6 +35,10 @@ struct CelestialBody {
     int propCount = 0;
     float propHeight = 0.0f; // lo mas alto que sobresalen, para el descarte
 
+    // Anillos (solo Aurelia): malla plana en radios del planeta.
+    Mesh ring;
+    float ringOuter = 0.0f; // radio exterior de los anillos, en radios del planeta
+
     // Crea los niveles de detalle (de 20480 a 320 triangulos) y, si hay
     // shape, los deforma.
     void buildLods(const Material& material);

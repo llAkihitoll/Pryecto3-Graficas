@@ -13,6 +13,8 @@ const unsigned SUN_SEED = 7;
 const unsigned DUNE_SEED = 42;
 const unsigned GLACIA_SEED = 1337;
 const unsigned VERGEL_SEED = 99;
+const unsigned AURELIA_SEED = 314;
+const unsigned IGNIS_SEED = 666;
 const int STAR_COUNT = 1800;
 
 // Subdivisiones de cada nivel de detalle y desde cuantos pixeles de radio
@@ -127,10 +129,18 @@ void Scene::buildProps(unsigned seed) {
                              [&](const Vec3& p) { return smoothstep(0.22f, 0.3f, vergelElevation(vergelTerrain, p)); }},
                  seed + 5, density, vergel);
 
-    const std::vector<PropInstance>* lists[] = {nullptr, &dune, &glacia, &vergel};
-    const float heights[] = {0.0f, 3.6f, 2.0f, 2.7f}; // altura maxima de cada planeta (modelo * escala)
+    // Ignis: rocas sobre el basalto, nunca sobre la lava.
+    std::vector<PropInstance> ignis;
+    Noise ignisTerrain(IGNIS_SEED);
+    scatterProps(ScatterRule{rocks, 250, 0.5f, 0.16f, 0.35f, 0.8f,
+                             [&](const Vec3& p) { return ignisLava(ignisTerrain, p) > 0.05f ? 0.0f : 1.0f; }},
+                 seed + 6, density, ignis);
+
+    const std::vector<PropInstance>* lists[] = {nullptr, &dune, &glacia, &vergel, nullptr, &ignis};
+    const float heights[] = {0.0f, 3.6f, 2.0f, 2.7f, 0.0f, 1.0f}; // altura maxima de cada planeta (modelo * escala)
     std::printf("Objetos de superficie (semilla %u):", seed);
-    for (int i = 1; i < 4; ++i) {
+    for (int i = 1; i < (int)bodies.size(); ++i) {
+        if (!lists[i]) continue; // Aurelia es de gas: no tiene objetos encima
         // Los objetos se apoyan en la altura real del terreno si esta deformado.
         bodies[i].props = mergeProps(*lists[i], bodies[i].radius, deformTerrain ? bodies[i].shape : nullptr);
         bodies[i].propCount = (int)lists[i]->size();
@@ -193,6 +203,40 @@ void Scene::build(unsigned seed) {
     vergel.cloudPeriod = 150.0f;
     bodies.push_back(std::move(vergel));
 
+    CelestialBody aurelia;
+    aurelia.name = "Aurelia";
+    aurelia.buildLods(Material{"Aurelia", Vec3{0.9f, 0.75f, 0.55f}});
+    aurelia.shader = aureliaShader;
+    aurelia.radius = 18.0f;
+    aurelia.orbitRadius = 450.0f;
+    aurelia.orbitPeriod = 600.0f;
+    aurelia.orbitPhase = 0.55f;
+    aurelia.spinPeriod = 90.0f;
+    aurelia.axialTilt = radians(20.0f);
+    aurelia.surfaceGravity = 14.0f;
+    // Tres anillos con huecos entre ellos (los huecos son geometria real).
+    aurelia.ring.materials = {Material{"Anillo interior", {0.70f, 0.62f, 0.50f}},
+                              Material{"Anillo medio", {0.90f, 0.82f, 0.68f}},
+                              Material{"Anillo exterior", {0.60f, 0.52f, 0.42f}}};
+    addRing(aurelia.ring, 1.35f, 1.65f, 128, 0);
+    addRing(aurelia.ring, 1.72f, 2.15f, 128, 1);
+    addRing(aurelia.ring, 2.22f, 2.45f, 128, 2);
+    aurelia.ringOuter = 2.45f;
+    bodies.push_back(std::move(aurelia));
+
+    CelestialBody ignis;
+    ignis.name = "Ignis";
+    ignis.buildLods(Material{"Ignis", Vec3{0.3f, 0.2f, 0.15f}});
+    ignis.shader = ignisShader;
+    ignis.radius = 9.0f;
+    ignis.orbitRadius = 85.0f;
+    ignis.orbitPeriod = 150.0f;
+    ignis.orbitPhase = 2.4f;
+    ignis.spinPeriod = 35.0f;
+    ignis.axialTilt = radians(5.0f);
+    ignis.surfaceGravity = 9.0f;
+    bodies.push_back(std::move(ignis));
+
     // Hornear las superficies de todos los cuerpos al mismo tiempo (cada
     // horneado ademas reparte sus 6 caras en hilos). Los cuerpos ya estan
     // todos en el vector, asi que no se mueven de memoria mientras tanto.
@@ -201,6 +245,8 @@ void Scene::build(unsigned seed) {
     bakers.emplace_back([this]() { bakeDune(bodies[1].textures, DUNE_SEED, 512); });
     bakers.emplace_back([this]() { bakeGlacia(bodies[2].textures, GLACIA_SEED, 512); });
     bakers.emplace_back([this]() { bakeVergel(bodies[3].textures, VERGEL_SEED, 512); });
+    bakers.emplace_back([this]() { bakeAurelia(bodies[4].textures, AURELIA_SEED, 512); });
+    bakers.emplace_back([this]() { bakeIgnis(bodies[5].textures, IGNIS_SEED, 512); });
     for (std::thread& t : bakers) t.join();
 
     for (unsigned i = 0; i < 3; ++i) rockModels.push_back(makeRock(100 + i)); // 3 variantes de roca
@@ -254,6 +300,20 @@ void Scene::drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const O
 
         // Descarte: si la esfera del cuerpo no toca el volumen de vision,
         // no se transforma ni un solo vertice.
+        // Los anillos sobresalen mucho del planeta: se prueban por separado
+        // (se pueden ver los anillos aunque el planeta este fuera de cuadro).
+        bool ringVisible = !body.ring.triangles.empty() &&
+                           (!opt.cullObjects || sphereInFrustum(u, center, body.radius * body.ringOuter));
+        if (ringVisible) {
+            u.model = body.modelMatrix(u.time);
+            u.objectCenter = center;
+            u.objectRadius = body.radius;
+            bool cull = u.cullBackFaces;
+            u.cullBackFaces = false; // se ven por arriba y por abajo
+            drawMesh(fb, body.ring, u, ringShader, stats);
+            u.cullBackFaces = cull;
+        }
+
         if (opt.cullObjects && !sphereInFrustum(u, center, body.radius)) {
             stats.objectsCulled++;
             body.currentLod = -1;
