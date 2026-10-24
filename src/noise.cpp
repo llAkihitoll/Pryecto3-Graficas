@@ -64,14 +64,27 @@ Vec3 Noise::cellPoint(int x, int y, int z) const {
 }
 
 float Noise::cellular(const Vec3& p) const {
+    float f1, f2;
+    cellular2(p, f1, f2);
+    return f1;
+}
+
+void Noise::cellular2(const Vec3& p, float& f1, float& f2) const {
     int cx = (int)std::floor(p.x), cy = (int)std::floor(p.y), cz = (int)std::floor(p.z);
-    float best = 1e9f;
-    // El punto mas cercano tiene que estar en esta celda o en una vecina.
+    float best = 1e9f, second = 1e9f;
+    // Los puntos mas cercanos tienen que estar en esta celda o en una vecina.
     for (int dz = -1; dz <= 1; ++dz)
         for (int dy = -1; dy <= 1; ++dy)
             for (int dx = -1; dx <= 1; ++dx) {
                 Vec3 d = cellPoint(cx + dx, cy + dy, cz + dz) - p;
-                best = std::min(best, dot(d, d));
+                float dist2 = dot(d, d);
+                if (dist2 < best) {
+                    second = best;
+                    best = dist2;
+                } else if (dist2 < second) {
+                    second = dist2;
+                }
             }
-    return std::sqrt(best);
+    f1 = std::sqrt(best);
+    f2 = std::sqrt(second);
 }
