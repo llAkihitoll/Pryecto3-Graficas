@@ -65,6 +65,23 @@ Mesh makeIcosphere(int subdivisions, const Material& material) {
     return mesh;
 }
 
+void addRing(Mesh& mesh, float inner, float outer, int segments, int material) {
+    int base = (int)mesh.vertices.size();
+    const Vec3 up{0, 1, 0};
+    for (int i = 0; i < segments; ++i) {
+        float a = 2.0f * PI * i / segments;
+        float c = std::cos(a), s = std::sin(a);
+        mesh.vertices.push_back(Vertex{{inner * c, 0, inner * s}, up});
+        mesh.vertices.push_back(Vertex{{outer * c, 0, outer * s}, up});
+    }
+    for (int i = 0; i < segments; ++i) {
+        int j = (i + 1) % segments;
+        int in0 = base + 2 * i, out0 = in0 + 1, in1 = base + 2 * j, out1 = in1 + 1;
+        mesh.triangles.push_back(Triangle{in0, in1, out1, material});
+        mesh.triangles.push_back(Triangle{in0, out1, out0, material});
+    }
+}
+
 void displaceSphere(Mesh& mesh, const std::function<float(const Vec3&)>& shape) {
     for (Vertex& v : mesh.vertices) {
         Vec3 dir = normalize(v.position);

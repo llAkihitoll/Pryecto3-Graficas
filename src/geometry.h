@@ -11,3 +11,8 @@ Mesh makeIcosphere(int subdivisions, const Material& material);
 // la distancia shape(direccion) del centro (1 = sin cambio). Luego recalcula
 // las normales promediando las caras que tocan cada vertice.
 void displaceSphere(Mesh& mesh, const std::function<float(const Vec3&)>& shape);
+
+// Agrega un anillo plano (en el plano XZ, normal +Y) entre los radios inner
+// y outer, con "segments" divisiones alrededor. Se dibuja sin descarte de
+// caras traseras para verlo desde arriba y desde abajo.
+void addRing(Mesh& mesh, float inner, float outer, int segments, int material);
