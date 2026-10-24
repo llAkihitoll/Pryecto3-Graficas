@@ -5,7 +5,9 @@
 // recibe un pixel ya interpolado y devuelve su color (0..1).
 
 // Blinn-Phong con el color del material, mas un borde azulado (Fresnel)
-// para que la silueta del carro se distinga contra el espacio oscuro.
+// para que la silueta del carro se distinga contra el espacio oscuro. Si el
+// material tiene mapa de normales (chasis, rines, llantas) usa la normal del
+// mapa en espacio tangente.
 Vec3 carShader(const Fragment& f, const Uniforms& u);
 
 // Sol (shader animado): granulos de plasma que se encienden y apagan con el

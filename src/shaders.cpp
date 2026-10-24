@@ -8,9 +8,21 @@ static float smoothstep(float a, float b, float x) {
     return t * t * (3.0f - 2.0f * t);
 }
 
+// Mapeo de normales en espacio tangente: la normal del mapa esta expresada
+// en la base (T, B, N) de la superficie, asi que se pasa al mundo con esa
+// base: n = T * x + B * y + N * z.
+static Vec3 applyNormalMap(const Fragment& f, const Material& m) {
+    Vec3 n = f.normal;
+    // Gram-Schmidt otra vez: la tangente interpolada ya no es perpendicular.
+    Vec3 t = normalize(f.tangent - n * dot(n, f.tangent));
+    Vec3 b = cross(n, t) * (f.uvw.z < 0.0f ? -1.0f : 1.0f);
+    Vec3 tn = m.normalMap->sample(f.uvw.x, f.uvw.y);
+    return normalize(t * (tn.x * m.normalStrength) + b * (tn.y * m.normalStrength) + n * tn.z);
+}
+
 Vec3 carShader(const Fragment& f, const Uniforms& u) {
     const Material& m = *f.material;
-    Vec3 n = f.normal;
+    Vec3 n = (u.normalMapping && m.normalMap) ? applyNormalMap(f, m) : f.normal;
     Vec3 toLight = normalize(u.lightPos - f.worldPos);
     Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
 
