@@ -25,7 +25,7 @@ sin pantallas de carga ni cambios de escena.
 | ![Duna](docs/capturas/02_duna.png) | ![Glacia](docs/capturas/03_glacia.png) |
 | ![Vergel](docs/capturas/04_vergel.png) | ![Sol animado](docs/capturas/05_sol.png) |
 | ![Aurelia y sus anillos](docs/capturas/08_aurelia.png) | ![Ignis](docs/capturas/09_ignis.png) |
-| ![Fennec con el kit espacial y boost](docs/capturas/10_kit.png) | ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) |
+| ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) | ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) |
 
 ---
 
@@ -41,10 +41,9 @@ sin pantallas de carga ni cambios de escena.
 
 - **Modelo del carro:** el Fennec es un modelo del videojuego *Rocket League* (Psyonix). Se obtuvo
   como recurso externo (carpeta [fennec-rocket-league-car/](fennec-rocket-league-car/): FBX y texturas);
-  **no fue modelado por el equipo**. Para adaptarlo como nave, el equipo le agregó un **kit
-  espacial modelado en código** ([src/spacekit.cpp](src/spacekit.cpp)): dos propulsores con tobera
-  incandescente, alerones en flecha, una aleta dorsal y llamas de propulsión animadas (tecla `K`
-  para comparar con el modelo original). Se convirtió a OBJ con un script propio de Blender
+  **no fue modelado por el equipo**. La llama del boost sale de los dos escapes que ya tiene el
+  modelo, como en el juego; su posición se encontró analizando la geometría de la parte trasera
+  ([src/boost_flame.h](src/boost_flame.h)). Se convirtió a OBJ con un script propio de Blender
   ([tools/export_car.py](tools/export_car.py)), que corrige los ejes, las ruedas espejadas, exporta
   las coordenadas de textura y los mapas de normales del modelo (reducidos a 1024 px en
   `assets/textures/`) y genera una versión reducida (LOD).
@@ -109,7 +108,6 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `--flat` | Duna sin deformar (esfera), para comparar |
 | `--no-opt` | Sin descarte de objetos ni LOD, para comparar contadores |
 | `--no-normal-map` | El carro sin mapas de normales, para comparar |
-| `--no-kit` | El carro sin el kit espacial (como el modelo original) |
 | `--time S` | Adelanta la simulación S segundos |
 | `--dt-test` | Prueba de consistencia: el mismo vuelo simulado a 20, 30, 60, 144 y 240 FPS |
 | `--screenshot archivo.png` | Guarda un cuadro y termina (se combina con las opciones siguientes) |
@@ -127,7 +125,7 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `A` / `D` | Girar a la izquierda / derecha |
 | `↑` / `↓` | En vuelo libre: subir o bajar la nariz. En modo superficie: subir o bajar de altitud |
 | `Q` / `E` | Rodar sobre el eje del carro (como el air roll de Rocket League) |
-| `Shift` | Boost: dura 3 s y se recarga solo |
+| `Shift` | Boost: sale fuego de los escapes del carro; dura 3 s y se recarga solo |
 | `Espacio` | Freno fuerte que también detiene los giros y la deriva por gravedad |
 | Botón derecho + ratón | Mirar alrededor del carro. Al soltar, la cámara vuelve atrás |
 | Rueda del ratón | Acercar o alejar la cámara del carro |
@@ -135,7 +133,6 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `V` | Activar o desactivar la gravedad |
 | `G` | Duna deformada o como esfera lisa |
 | `M` | Activar o desactivar los mapas de normales del carro |
-| `K` | Mostrar u ocultar el kit espacial del carro |
 | `N` | Nueva semilla para los objetos de superficie |
 | `O` | Activar o desactivar el descarte de objetos |
 | `L` | Activar o desactivar el nivel de detalle automático |
@@ -204,7 +201,7 @@ src/
   ship.*              Física del carro: control, modo superficie, gravedad, colisión
   camera.*            Cámara de persecución
   hud.*, font.*       HUD y fuente propia de 5x7 píxeles
-  spacekit.*          Kit espacial del carro (propulsores, alerones, aleta) y llamas
+  boost_flame.*       Llama del boost que sale de los escapes del Fennec
   mesh_builder.h      Ayudante para construir modelos en código con caras planas
 ```
 
@@ -253,7 +250,7 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `ringShader` | Anillos | Vetas finas según la distancia al centro, luz por las dos caras y **sombra del planeta** (rayo hacia el sol contra su esfera) |
 | `ignisShader` | Volcánico | Roca con relieve y lava emisiva con pulsos de calor que avanzan con el tiempo |
 | `carShader` | Carro | Blinn-Phong con los materiales del modelo, **mapeo de normales en espacio tangente** (chasis, rines y llantas), borde Fresnel y faros emisivos |
-| `flameShader` | Llamas de los propulsores | Emisiva: blanca en la tobera, del color de la llama en el medio y oscura en la punta, con parpadeo según el tiempo |
+| `flameShader` | Llama del boost | Emisiva: blanca en el escape, del color de la llama en el medio y oscura en la punta, con parpadeo según el tiempo |
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
 
 ### Mapeo de normales del carro ([texture.cpp](src/texture.cpp), [obj_loader.cpp](src/obj_loader.cpp), [shaders.cpp](src/shaders.cpp))
@@ -323,8 +320,7 @@ altura del terreno) que gira con el planeta.
 
 ## Limitaciones conocidas
 
-- El modelo base del carro no es de autoría propia; el equipo lo modificó con el kit espacial (ver
-  *Recursos externos*).
+- El modelo del carro no es de autoría propia (ver *Recursos externos*).
 - Los objetos de superficie y los anillos de Aurelia no tienen colisión (el carro los puede atravesar).
 - No hay sombras proyectadas entre objetos; solo la sombra del planeta sobre sus objetos.
 - La gravedad del sol es suave a propósito, para que el carro detenido no se vaya cayendo.
