@@ -291,6 +291,7 @@ int main(int argc, char* argv[]) {
 
     Uint64 last = SDL_GetPerformanceCounter();
     bool running = true;
+    int screenshotFrame = 0; // en modo captura se guarda el tercer cuadro (los primeros calientan)
     while (running) {
         // Delta time: segundos reales desde el cuadro anterior. Todo lo que
         // se mueve se multiplica por dt para no depender de los FPS.
@@ -406,7 +407,8 @@ int main(int argc, char* argv[]) {
             if (helpTimer <= 0.0f) showHelp = false;
         }
         HudInfo hud;
-        hud.fps = displayedFps;
+        // En modo captura no hay tiempo real: se estiman los FPS con el render.
+        hud.fps = screenshotPath ? (lastFrameMs > 0.0f ? 1000.0f / lastFrameMs : 0.0f) : displayedFps;
         hud.frameMs = lastFrameMs;
         hud.speed = speed;
         hud.maxSpeed = ship.tuning.maxBoostSpeed;
@@ -426,7 +428,7 @@ int main(int argc, char* argv[]) {
         double frameMs = 1000.0 * (SDL_GetPerformanceCounter() - frameStart) / SDL_GetPerformanceFrequency();
         lastFrameMs = (float)frameMs;
 
-        if (screenshotPath) {
+        if (screenshotPath && ++screenshotFrame >= 3) {
             fb.savePNG(screenshotPath);
             std::printf("%s: render %.1f ms | objetos %d dibujados, %d descartados | objetos de superficie %d | "
                         "triangulos enviados %d, rasterizados %d | LOD (-1 = descartado) Sol %d, Duna %d, "
