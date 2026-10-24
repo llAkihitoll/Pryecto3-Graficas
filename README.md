@@ -6,7 +6,7 @@ abre la ventana, lee el teclado y muestra el framebuffer que calcula el programa
 
 ![Vista inicial con los tres planetas y el HUD](docs/capturas/01_inicio.png)
 
-El sistema tiene un sol animado y tres planetas con identidad propia que orbitan y giran según el
+El sistema tiene un sol animado y cinco planetas con identidad propia que orbitan y giran según el
 tiempo transcurrido:
 
 | Planeta | Superficie | Objetos encima |
@@ -14,6 +14,8 @@ tiempo transcurrido:
 | **Duna** | Desierto craterizado, con dunas en las tierras bajas y **geometría deformada con ruido** | Rocas y balizas con luz |
 | **Glacia** | Placas de hielo con grietas que brillan de noche | Cristales que brotan en las grietas |
 | **Vergel** | Continentes, océanos, montañas nevadas y **nubes animadas** | Bosques de árboles alienígenas y rocas |
+| **Aurelia** | Gigante gaseoso con bandas que giran a distinta velocidad, una gran tormenta y **anillos** | — (es de gas) |
+| **Ignis** | Planeta volcánico junto al sol, con ríos y lagos de **lava que brilla** | Rocas sobre el basalto |
 
 El carro puede viajar entre ellos, acercarse, rodearlos en **modo superficie** y volver a alejarse
 sin pantallas de carga ni cambios de escena.
@@ -86,14 +88,14 @@ Probado en **Windows 11** con **MSYS2 UCRT64**.
    También se puede abrir `build/galaxia.exe` con doble clic o desde PowerShell, sin tener MSYS2 en
    el PATH.
 
-Al arrancar tarda unos **2 segundos** en generar las superficies del sol y los planetas.
+Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los planetas.
 
 ### Opciones de línea de comandos (para pruebas)
 
 | Opción | Qué hace |
 |---|---|
 | `--seed N` | Semilla para repartir los objetos de superficie (por defecto 2026) |
-| `--near N` | Empieza frente al lado de día del cuerpo N (1 = Duna, 2 = Glacia, 3 = Vergel) |
+| `--near N` | Empieza frente al lado de día del cuerpo N (1 = Duna, 2 = Glacia, 3 = Vergel, 4 = Aurelia, 5 = Ignis) |
 | `--hide-help` | Empieza sin el panel de controles |
 | `--flat` | Duna sin deformar (esfera), para comparar |
 | `--no-opt` | Sin descarte de objetos ni LOD, para comparar contadores |
@@ -155,8 +157,9 @@ Duración sugerida: unos 2 minutos. Todo ocurre en la misma escena.
 | 1:35–1:50 | Mantener `↑` hasta salir del modo superficie y luego `Shift` | **Alejamiento**: el planeta vuelve a verse como un cuerpo del sistema |
 | 1:50–2:00 | Pulsar `O` y `L` mirando los contadores | El descarte de objetos y el LOD cambian el trabajo del renderizador |
 
-Opcional: visitar Glacia y Vergel para mostrar sus superficies (las grietas brillan más en el lado
-de noche y las nubes de Vergel se mueven).
+Opcional: visitar los demás planetas. En Glacia las grietas brillan más en el lado de noche, en
+Vergel se mueven las nubes, en Aurelia las bandas se deslizan entre sí y la sombra del planeta cruza
+los anillos, y en Ignis la lava late con pulsos de calor.
 
 ---
 
@@ -175,10 +178,10 @@ src/
   parallel.*          Pool de hilos para rasterizar por franjas
   shaders.*           Shaders de fragmentos (sol, planetas, carro, objetos)
   obj_loader.*        Cargador OBJ/MTL propio
-  mesh.*, geometry.*  Mallas, icosfera por subdivisión y deformación de esferas
+  mesh.*, geometry.*  Mallas, icosfera por subdivisión, deformación de esferas y anillos
   noise.*             Ruido Perlin, fbm y celular (Worley)
   cubemap.h           Texturas en cubo (horneado en paralelo y lectura bilineal)
-  planets.*           Superficies generadas del sol, Duna, Glacia y Vergel
+  planets.*           Superficies generadas del sol y de los cinco planetas
   props.*             Modelos de superficie y su distribución con ruido
   scene.*             Sol, planetas (órbitas, giro, LOD), estrellas y objetos de superficie
   ship.*              Física del carro: control, modo superficie, gravedad, colisión
@@ -227,6 +230,9 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `duneShader` | Desierto con relieve | Color y normal leídos de un cubemap que gira con el planeta; línea día/noche suave, luz de relleno nocturna y bruma de atmósfera |
 | `glaciaShader` | Hielo | Especular muy concentrado (Blinn-Phong), borde Fresnel azulado y grietas emisivas que brillan más de noche |
 | `vergelShader` | Planeta vivo | El sol solo se refleja en el agua (máscara), nubes que se desplazan con una rotación que cambia con el tiempo y atmósfera azul |
+| `aureliaShader` | Gigante gaseoso | **Rotación diferencial**: la textura se lee girada según la latitud y el tiempo, así las bandas se deslizan; borde oscurecido y bruma |
+| `ringShader` | Anillos | Vetas finas según la distancia al centro, luz por las dos caras y **sombra del planeta** (rayo hacia el sol contra su esfera) |
+| `ignisShader` | Volcánico | Roca con relieve y lava emisiva con pulsos de calor que avanzan con el tiempo |
 | `carShader` | Carro | Blinn-Phong con los materiales del modelo, borde Fresnel y faros emisivos |
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
 
@@ -242,11 +248,11 @@ del terreno.
 
 | Característica | Pts | Dónde verla | Implementación |
 |---|---|---|---|
-| Planetas distinguibles (Duna, Glacia, Vergel) que orbitan, giran y se pueden ver de cerca | 30 | Desde el inicio se ven los tres; `--near 1/2/3` | `scene.cpp`, `planets.cpp` |
+| Planetas distinguibles (Duna, Glacia, Vergel, Aurelia, Ignis) que orbitan, giran y se pueden ver de cerca | 50 | Desde el inicio se ven cuatro; `--near 1` a `--near 5` | `scene.cpp`, `planets.cpp` |
 | 4 tipos de modelo propio en la superficie: roca, árbol alienígena, cristal, baliza | 20 | Acercarse a cada planeta | `props.cpp` (`makeRock`, `makeAlienTree`...) |
 | Distribución procedural reproducible con ruido y semilla | 10 | Tecla `N` / `--seed N` (la misma semilla da la misma imagen) | `props.cpp` `scatterProps`, `scene.cpp` `buildProps` |
 | Posición y orientación correctas sobre la superficie curva mientras el planeta gira | 5 | Los objetos acompañan el giro (los árboles siguen sobre los continentes) | `props.cpp` `mergeProps`, `scene.cpp` `frameMatrix` |
-| Shaders propios con efecto distinto | 24 | Sol, Duna, Glacia, Vergel (también carro y objetos) | `shaders.cpp` |
+| Shaders propios con efecto distinto | 24 | Sol, Duna, Glacia, Vergel, Aurelia, anillos, Ignis (también carro y objetos) | `shaders.cpp` |
 | Shader animado | 8 | El sol hierve; las nubes de Vergel se mueven | `sunShader`, `vergelShader` |
 | Deformación de la geometría de un planeta con ruido | 10 | Silueta de Duna; tecla `G` para comparar | `geometry.cpp` `displaceSphere`, `scene.cpp` `duneShape` |
 | Generación procedural de geometría antes de rasterizar | 10 | Todas las esferas son icosaedros subdivididos | `geometry.cpp` `makeIcosphere` |
@@ -278,7 +284,7 @@ girada con el planeta en el shader. El mapa está en espacio del objeto, no en e
 ## Limitaciones conocidas
 
 - El modelo del carro no es de autoría propia (ver *Recursos externos*).
-- Los objetos de superficie no tienen colisión (el carro puede atravesar un árbol si baja mucho).
+- Los objetos de superficie y los anillos de Aurelia no tienen colisión (el carro los puede atravesar).
 - No hay sombras proyectadas entre objetos; solo la sombra del planeta sobre sus objetos.
 - La gravedad del sol es suave a propósito, para que el carro detenido no se vaya cayendo.
 - Solo se probó en Windows 11 con MSYS2 UCRT64. El código no depende de Windows salvo la copia de
