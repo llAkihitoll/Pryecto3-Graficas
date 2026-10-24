@@ -9,6 +9,7 @@ struct SphereCollider {
     Vec3 velocity;     // velocidad orbital del cuerpo
     float radius;
     float zone = 0.0f; // altitud donde empieza el modo de acercamiento (0 = no tiene)
+    float surfaceGravity = 0.0f; // aceleracion de la gravedad en su superficie (unidades/s^2)
 
     // Si el planeta esta deformado: su forma (en el espacio local del
     // planeta) y el giro inverso para pasar una direccion del mundo a ese espacio.
@@ -63,6 +64,10 @@ struct ShipTuning {
     float climbSpeed = 10.0f;      // unidades/s al subir o bajar con las flechas (a ras del suelo)
     float climbPerAltitude = 0.6f; // mas alto sube mas rapido, para salir de la zona sin tardar
     float alignRate = 3.5f;        // que tan rapido el carro se endereza con el planeta
+
+    // Gravedad
+    float gravityDrag = 0.08f;     // perdida lenta de la deriva por gravedad (por segundo)
+    float gravitySurfaceDecay = 3.0f; // en modo superficie la deriva se apaga rapido
 };
 
 // El Fennec como nave. Guarda su orientacion como tres ejes ortonormales
@@ -89,6 +94,12 @@ struct Ship {
     // su vertical y vuela paralelo al suelo, asi avanzar derecho le da la
     // vuelta al planeta. surfaceEnabled se cambia con la tecla F.
     bool surfaceEnabled = true;
+
+    // Gravedad: deriva que acumulan las atracciones de los cuerpos. Va aparte
+    // de "velocity" porque el agarre alinearia esa velocidad con el frente
+    // y borraria el efecto; asi la gravedad si curva la trayectoria.
+    bool gravityEnabled = true; // tecla V
+    Vec3 gravityVelocity;
     bool surfaceMode = false;  // activo en este momento
     float holdAltitude = 4.0f; // altitud que mantiene sin tocar las flechas
 

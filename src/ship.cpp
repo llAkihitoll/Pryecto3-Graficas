@@ -167,7 +167,22 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
     // del planeta. Asi el planeta no se aleja (ni lo atropella) mientras se
     // le da la vuelta, y "velocity" queda relativa a la superficie.
     Vec3 carried = nearest >= 0 ? bodies[nearest].velocity * closeness : Vec3{0, 0, 0};
-    position += (velocity + carried) * h;
+    // Gravedad: cada cuerpo atrae con a = g * (R / r)^2 (inversa del
+    // cuadrado de la distancia, igual a g en su superficie). En modo
+    // superficie no se aplica: ahi el modo local ya controla la altura.
+    if (gravityEnabled && !surfaceMode) {
+        for (const SphereCollider& b : bodies) {
+            Vec3 d = b.center - position;
+            float r2 = std::max(dot(d, d), b.radius * b.radius);
+            float a = b.surfaceGravity * b.radius * b.radius / r2;
+            gravityVelocity += d * (a / std::sqrt(r2) * h);
+        }
+        gravityVelocity = gravityVelocity * std::exp(-(in.brake ? t.stabilize : t.gravityDrag) * h);
+    } else {
+        gravityVelocity = gravityVelocity * std::exp(-t.gravitySurfaceDecay * h);
+    }
+
+    position += (velocity + gravityVelocity + carried) * h;
 
     // Al avanzar en linea recta sobre una esfera la vertical cambia un poco.
     // Se gira la velocidad horizontal para que siga pegada a la nueva
@@ -212,5 +227,8 @@ void Ship::collide(const std::vector<SphereCollider>& bodies) {
         position = b.center + n * minDist;
         float into = dot(velocity, n);
         if (into < 0) velocity -= n * (into * (1.0f + tuning.bounce));
+        // La gravedad tampoco puede seguir empujando hacia adentro.
+        float fall = dot(gravityVelocity, n);
+        if (fall < 0) gravityVelocity -= n * fall;
     }
 }
