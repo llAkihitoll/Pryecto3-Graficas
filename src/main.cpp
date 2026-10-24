@@ -7,6 +7,7 @@
 #include <vector>
 #include "camera.h"
 #include "framebuffer.h"
+#include "font.h"
 #include "hud.h"
 #include "obj_loader.h"
 #include "renderer.h"
@@ -160,6 +161,7 @@ int main(int argc, char* argv[]) {
     //   --near N                  empieza frente al lado de dia del cuerpo N (1 = Duna, 2 = Glacia...)
     //   --seed N                  semilla para repartir los objetos de superficie
     //   --flat                    Duna sin deformar (esfera), para comparar
+    //   --hide-help               empieza sin el panel de controles
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
@@ -168,6 +170,7 @@ int main(int argc, char* argv[]) {
     int nearBody = -1;
     unsigned propSeed = 2026;
     bool flatTerrain = false;
+    bool showHelp = true;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
@@ -181,6 +184,7 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--near") == 0 && i + 1 < argc) nearBody = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--seed") == 0 && i + 1 < argc) propSeed = (unsigned)std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--flat") == 0) flatTerrain = true;
+        else if (std::strcmp(argv[i], "--hide-help") == 0) showHelp = false;
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
 
@@ -278,6 +282,11 @@ int main(int argc, char* argv[]) {
 
     // Para el titulo de la ventana: promedio de FPS cada medio segundo.
     float titleTimer = 0.0f;
+    float displayedFps = 0.0f;
+    float lastFrameMs = 0.0f; // tiempo de render del cuadro anterior (para el HUD)
+    // La ayuda se oculta sola a los 15 s, a menos que se use la tecla H.
+    float helpTimer = 15.0f;
+    bool helpTouched = false;
     int framesCounted = 0;
 
     Uint64 last = SDL_GetPerformanceCounter();
@@ -307,6 +316,10 @@ int main(int argc, char* argv[]) {
                     case SDLK_o: opt.cullObjects = !opt.cullObjects; break;
                     case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
                     case SDLK_v: ship.gravityEnabled = !ship.gravityEnabled; break;
+                    case SDLK_h:
+                        showHelp = !showHelp;
+                        helpTouched = true;
+                        break;
                     case SDLK_g: // deformacion de Duna: los objetos se vuelven a apoyar en el suelo
                         scene.deformTerrain = !scene.deformTerrain;
                         scene.buildProps(scene.propSeed);
@@ -370,15 +383,48 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // HUD: velocidad (cian) y boost (naranja) en la esquina inferior izquierda.
+        // Etiquetas con el nombre y la distancia encima de cada cuerpo que se
+        // ve (si no esta tan cerca que ocupe toda la pantalla).
+        for (const CelestialBody& b : scene.bodies) {
+            if (b.currentLod < 0) continue; // descartado: no esta en la vista
+            Vec3 center = b.position(elapsed);
+            Vec4 c = u.projection * u.view * Vec4(center, 1.0f);
+            float r = projectedRadius(u, center, b.radius, RENDER_HEIGHT);
+            float dist = length(center - ship.position);
+            if (c.w <= 0.0f || r > 220.0f || dist < b.radius * 3.0f) continue;
+            int sx = (int)((c.x / c.w * 0.5f + 0.5f) * RENDER_WIDTH);
+            int sy = (int)((1.0f - (c.y / c.w * 0.5f + 0.5f)) * RENDER_HEIGHT - r) - 14;
+            char label[64];
+            std::snprintf(label, sizeof(label), "%s %.0f", b.name.c_str(), dist);
+            drawText(fb, sx - textWidth(label) / 2, sy, label, 0xFFD8E0F0);
+        }
+
+        // HUD con texto: navegacion, contadores del renderizador y ayuda.
         float speed = length(ship.velocity);
-        drawBar(fb, 16, RENDER_HEIGHT - 34, 160, 8, speed / ship.tuning.maxBoostSpeed, 0xFF3CC8FF);
-        drawBar(fb, 16, RENDER_HEIGHT - 20, 160, 8, ship.boostFuel / ship.tuning.boostCapacity,
-                ship.boosting ? 0xFFFFE070 : 0xFFFF8A20);
-        // Indicador del modo superficie: verde activo, gris apagado con F.
-        uint32_t modeColor = ship.surfaceMode ? 0xFF50E070 : (ship.surfaceEnabled ? 0xFF303848 : 0xFF803030);
-        fillRect(fb, 184, RENDER_HEIGHT - 34, 22, 22, modeColor);
+        if (!screenshotPath && !helpTouched && helpTimer > 0.0f) {
+            helpTimer -= dt;
+            if (helpTimer <= 0.0f) showHelp = false;
+        }
+        HudInfo hud;
+        hud.fps = displayedFps;
+        hud.frameMs = lastFrameMs;
+        hud.speed = speed;
+        hud.maxSpeed = ship.tuning.maxBoostSpeed;
+        hud.boostFraction = ship.boostFuel / ship.tuning.boostCapacity;
+        hud.boosting = ship.boosting;
+        hud.nearName = ship.nearest >= 0 ? scene.bodies[ship.nearest].name : "-";
+        hud.altitude = ship.altitude;
+        hud.surfaceMode = ship.surfaceMode;
+        hud.surfaceEnabled = ship.surfaceEnabled;
+        hud.gravity = ship.gravityEnabled;
+        hud.relief = scene.deformTerrain;
+        hud.opt = opt;
+        hud.stats = stats;
+        hud.seed = scene.propSeed;
+        hud.showHelp = showHelp;
+        drawHud(fb, hud);
         double frameMs = 1000.0 * (SDL_GetPerformanceCounter() - frameStart) / SDL_GetPerformanceFrequency();
+        lastFrameMs = (float)frameMs;
 
         if (screenshotPath) {
             fb.savePNG(screenshotPath);
@@ -397,6 +443,7 @@ int main(int argc, char* argv[]) {
         framesCounted++;
         titleTimer += dt;
         if (titleTimer >= 0.5f) {
+            displayedFps = framesCounted / titleTimer;
             char title[320];
             const char* nearName = ship.nearest >= 0 ? scene.bodies[ship.nearest].name.c_str() : "-";
             std::snprintf(title, sizeof(title),
