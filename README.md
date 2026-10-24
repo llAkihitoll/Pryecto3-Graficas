@@ -40,8 +40,9 @@ sin pantallas de carga ni cambios de escena.
 - **Modelo del carro:** el Fennec es un modelo del videojuego *Rocket League* (Psyonix). Se obtuvo
   como recurso externo (carpeta [fennec-rocket-league-car/](fennec-rocket-league-car/): FBX y texturas);
   **no fue modelado por el equipo**. Se convirtió a OBJ con un script propio de Blender
-  ([tools/export_car.py](tools/export_car.py)), que corrige los ejes, las ruedas espejadas y genera
-  una versión reducida (LOD).
+  ([tools/export_car.py](tools/export_car.py)), que corrige los ejes, las ruedas espejadas, exporta
+  las coordenadas de textura y los mapas de normales del modelo (reducidos a 1024 px en
+  `assets/textures/`) y genera una versión reducida (LOD).
 - **Modelos de superficie** (roca, árbol, cristal, baliza): construidos en código por el equipo
   ([src/props.cpp](src/props.cpp)).
 - **Texturas de los planetas y del sol:** generadas por procedimiento con ruido propio al arrancar.
@@ -58,6 +59,8 @@ sin pantallas de carga ni cambios de escena.
 - **SDL2**: solo para la ventana, la entrada de teclado y ratón, y copiar el framebuffer a la
   pantalla. No se usan sus funciones de dibujo.
 - **CMake + Ninja** para compilar.
+- **zlib**, solo para descomprimir los datos de los PNG de los mapas de normales del carro. El resto
+  del lector de PNG (bloques del archivo y filtros de cada fila) es propio ([src/texture.cpp](src/texture.cpp)).
 - **Blender 5.2**, solo para convertir el modelo del carro (no se necesita para compilar ni ejecutar).
 - No se usa ningún motor de juego, motor de física, OpenGL, shaders de GPU ni otra biblioteca de
   gráficos. Los hilos (`std::thread`) son de la biblioteca estándar de C++.
@@ -71,15 +74,16 @@ Probado en **Windows 11** con **MSYS2 UCRT64**.
 1. Instalar las herramientas en la terminal de MSYS2 UCRT64:
    ```sh
    pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake \
-             mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-SDL2
+             mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-SDL2 \
+             mingw-w64-ucrt-x86_64-zlib
    ```
 2. Compilar desde la raíz del repositorio:
    ```sh
    cmake -S . -B build -G Ninja
    cmake --build build
    ```
-   Al compilar se copian `assets/` y `SDL2.dll` dentro de `build/`. Las bibliotecas de C++ quedan
-   enlazadas dentro del ejecutable.
+   Al compilar se copian `assets/` y `SDL2.dll` dentro de `build/`. Las bibliotecas de C++ y zlib
+   quedan enlazadas dentro del ejecutable.
 3. Ejecutar desde la carpeta `build`:
    ```sh
    cd build
@@ -99,11 +103,13 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `--hide-help` | Empieza sin el panel de controles |
 | `--flat` | Duna sin deformar (esfera), para comparar |
 | `--no-opt` | Sin descarte de objetos ni LOD, para comparar contadores |
+| `--no-normal-map` | El carro sin mapas de normales, para comparar |
 | `--time S` | Adelanta la simulación S segundos |
 | `--dt-test` | Prueba de consistencia: el mismo vuelo simulado a 20, 30, 60, 144 y 240 FPS |
 | `--screenshot archivo.png` | Guarda un cuadro y termina (se combina con las opciones siguientes) |
 | `--fly "w:3,wa:2"` | Antes de la captura, simula un vuelo: teclas `w s a d q e`, `i`/`k` = flechas, `b` boost, `x` freno |
 | `--look yaw pitch` | Gira la cámara alrededor del carro (grados) en la captura |
+| `--zoom D` | Distancia de la cámara al carro en la captura |
 
 ---
 
@@ -118,9 +124,11 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `Shift` | Boost: dura 3 s y se recarga solo |
 | `Espacio` | Freno fuerte que también detiene los giros y la deriva por gravedad |
 | Botón derecho + ratón | Mirar alrededor del carro. Al soltar, la cámara vuelve atrás |
+| Rueda del ratón | Acercar o alejar la cámara del carro |
 | `F` | Activar o desactivar el modo superficie |
 | `V` | Activar o desactivar la gravedad |
 | `G` | Duna deformada o como esfera lisa |
+| `M` | Activar o desactivar los mapas de normales del carro |
 | `N` | Nueva semilla para los objetos de superficie |
 | `O` | Activar o desactivar el descarte de objetos |
 | `L` | Activar o desactivar el nivel de detalle automático |
@@ -167,6 +175,7 @@ los anillos, y en Ignis la lava late con pulsos de calor.
 
 ```
 assets/models/        Fennec convertido a OBJ (completo y reducido) + materiales
+assets/textures/      Mapas de normales del Fennec (reducidos a 1024 px)
 docs/capturas/        Imágenes del README
 fennec-rocket-league-car/  Modelo original (FBX y texturas), recurso externo
 tools/export_car.py   Conversión del FBX a OBJ con Blender
@@ -177,7 +186,8 @@ src/
   renderer.*          Pipeline: vértices, recorte, proyección, raster, profundidad, descarte
   parallel.*          Pool de hilos para rasterizar por franjas
   shaders.*           Shaders de fragmentos (sol, planetas, carro, objetos)
-  obj_loader.*        Cargador OBJ/MTL propio
+  obj_loader.*        Cargador OBJ/MTL propio (UV, normales, tangentes, mapas de normales)
+  texture.*           Lector de PNG y mapas de normales en espacio tangente
   mesh.*, geometry.*  Mallas, icosfera por subdivisión, deformación de esferas y anillos
   noise.*             Ruido Perlin, fbm y celular (Worley)
   cubemap.h           Texturas en cubo (horneado en paralelo y lectura bilineal)
@@ -233,8 +243,27 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `aureliaShader` | Gigante gaseoso | **Rotación diferencial**: la textura se lee girada según la latitud y el tiempo, así las bandas se deslizan; borde oscurecido y bruma |
 | `ringShader` | Anillos | Vetas finas según la distancia al centro, luz por las dos caras y **sombra del planeta** (rayo hacia el sol contra su esfera) |
 | `ignisShader` | Volcánico | Roca con relieve y lava emisiva con pulsos de calor que avanzan con el tiempo |
-| `carShader` | Carro | Blinn-Phong con los materiales del modelo, borde Fresnel y faros emisivos |
+| `carShader` | Carro | Blinn-Phong con los materiales del modelo, **mapeo de normales en espacio tangente** (chasis, rines y llantas), borde Fresnel y faros emisivos |
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
+
+### Mapeo de normales del carro ([texture.cpp](src/texture.cpp), [obj_loader.cpp](src/obj_loader.cpp), [shaders.cpp](src/shaders.cpp))
+
+![Ruedas con y sin mapa de normales](docs/capturas/07_mapa_normales.png)
+
+*Arriba con mapa de normales (tecla `M`): dibujo de la llanta y rayos del rin con relieve. Abajo sin él.*
+
+1. **Tangentes:** al cargar el OBJ, para cada triángulo se resuelven la tangente T y la bitangente B
+   a partir de sus aristas y de sus diferencias de UV (`e1 = du1·T + dv1·B`, `e2 = du2·T + dv2·B`).
+   Se acumulan en los vértices, se hacen perpendiculares a la normal (Gram-Schmidt) y se guarda un
+   signo por si las UV están espejadas.
+2. **Pipeline:** la UV, el signo y la tangente se interpolan por píxel con corrección de perspectiva.
+3. **Shader:** se arma la base `T, B = signo·(N × T), N` y la normal del mapa se pasa al mundo:
+   `n = T·x + B·y + N·z`.
+4. **Formatos:** las texturas del Fennec vienen de Unreal. Dos están "empaquetadas" (la x de la
+   normal en el canal alfa y la z reconstruida como `√(1 − x² − y²)`), y la y usa la convención de
+   DirectX, así que se invierte. El lector detecta el formato solo.
+
+### Superficies de los planetas
 
 Las superficies se calculan una sola vez al arrancar, con ruido, y se guardan en cubemaps de
 512×512 por cara ([planets.cpp](src/planets.cpp)). Calcular varias octavas de ruido en cada píxel
@@ -261,12 +290,13 @@ del terreno.
 | Atracción gravitatoria que modifica la trayectoria | 10 | Puntos cian; tecla `V` | `ship.cpp` (`gravityVelocity`) |
 | Colisión que impide atravesar el planeta | 4 | `↓` sostenido en superficie, o boost contra un planeta | `ship.cpp` `collide` |
 | Descarte de objetos fuera de la vista | 7 | Contadores del HUD; tecla `O` | `renderer.cpp` `sphereInFrustum` |
+| Mapeo de normales en el renderizador por software | 8 | Ruedas y chasis del carro; tecla `M` y rueda del ratón para acercarse | `texture.cpp`, `obj_loader.cpp` `computeTangents`, `shaders.cpp` `applyNormalMap` |
 | Niveles de detalle según la distancia | 8 | Contador de triángulos al acercarse; tecla `L` | `scene.cpp` `chooseLod`, LOD del carro en `main.cpp` |
 | Coherencia visual y claridad de la experiencia | hasta 10 | HUD, ayuda, etiquetas de planetas | `hud.cpp`, `font.cpp` |
 
-**Por confirmar con el profesor — mapeo de normales (8):** Duna, Glacia y Vergel usan una normal
-**por píxel** leída de un mapa de normales (un cubemap generado a partir de la altura del terreno),
-girada con el planeta en el shader. El mapa está en espacio del objeto, no en espacio tangente.
+Además del mapeo de normales en espacio tangente del carro, los planetas usan una normal **por
+píxel** leída de un mapa de normales en espacio del objeto (un cubemap generado a partir de la
+altura del terreno) que gira con el planeta.
 
 ## Pruebas realizadas
 
