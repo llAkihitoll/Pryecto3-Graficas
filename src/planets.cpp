@@ -8,6 +8,23 @@ static float smoothstep(float a, float b, float x) {
     return t * t * (3.0f - 2.0f * t);
 }
 
+// Normal con relieve por diferencias finitas: cuanto cambia la altura al
+// moverse un poco en dos direcciones tangentes a la esfera. bump controla
+// que tan marcado se ve el relieve.
+template <typename HeightFn>
+static void bakeReliefNormals(CubeMap<Vec3>& normals, int size, float bump, HeightFn height) {
+    const float e = 0.0015f;
+    normals.bake(size, [&](const Vec3& p) {
+        Vec3 helper = std::fabs(p.y) < 0.99f ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
+        Vec3 t1 = normalize(cross(p, helper));
+        Vec3 t2 = cross(p, t1);
+        float h0 = height(p);
+        float h1 = height(normalize(p + t1 * e));
+        float h2 = height(normalize(p + t2 * e));
+        return normalize(p - t1 * ((h1 - h0) / e * bump) - t2 * ((h2 - h0) / e * bump));
+    });
+}
+
 // ---------------------------------------------------------------- Duna
 
 // Perfil de un crater segun la distancia d al centro de su celda: hundido
@@ -58,18 +75,85 @@ void bakeDune(PlanetTextures& tex, unsigned seed, int size) {
         return c;
     });
 
-    // Normal por diferencias finitas: cuanto cambia la altura al moverse un
-    // poco en dos direcciones tangentes a la esfera.
-    const float e = 0.0015f;
-    const float bump = 0.06f; // que tan marcado se ve el relieve
-    tex.normal.bake(size, [&](const Vec3& p) {
-        Vec3 helper = std::fabs(p.y) < 0.99f ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
-        Vec3 t1 = normalize(cross(p, helper));
-        Vec3 t2 = cross(p, t1);
-        float h0 = duneAt(noise, p).height;
-        float h1 = duneAt(noise, normalize(p + t1 * e)).height;
-        float h2 = duneAt(noise, normalize(p + t2 * e)).height;
-        return normalize(p - t1 * ((h1 - h0) / e * bump) - t2 * ((h2 - h0) / e * bump));
+    bakeReliefNormals(tex.normal, size, 0.06f, [&](const Vec3& p) { return duneAt(noise, p).height; });
+}
+
+// ---------------------------------------------------------------- Glacia
+
+// Que tan cerca esta p de una grieta (1 = justo encima). Las grietas son los
+// bordes entre celdas del ruido celular: ahi f1 y f2 son casi iguales.
+static float crackAt(const Noise& noise, const Vec3& p, float frequency, float width) {
+    float f1, f2;
+    noise.cellular2(p * frequency, f1, f2);
+    return 1.0f - smoothstep(0.0f, width, f2 - f1);
+}
+
+static float glaciaHeight(const Noise& noise, const Vec3& p) {
+    float bigCracks = crackAt(noise, p, 5.0f, 0.09f);
+    float smallCracks = crackAt(noise, p + Vec3{4.0f, 1.0f, 7.0f}, 14.0f, 0.06f);
+    // Las placas se inclinan un poco cada una y las grietas son surcos.
+    return noise.fbm(p * 3.0f, 4) * 0.3f - bigCracks * 0.5f - smallCracks * 0.2f;
+}
+
+void bakeGlacia(PlanetTextures& tex, unsigned seed, int size) {
+    Noise noise(seed);
+    const Vec3 iceLight{0.80f, 0.91f, 0.98f}, iceDeep{0.52f, 0.70f, 0.90f};
+    const Vec3 frost{0.95f, 0.97f, 1.0f}, crackColor{0.08f, 0.30f, 0.55f};
+
+    tex.color.bake(size, [&](const Vec3& p) {
+        float bigCracks = crackAt(noise, p, 5.0f, 0.09f);
+        float smallCracks = crackAt(noise, p + Vec3{4.0f, 1.0f, 7.0f}, 14.0f, 0.06f);
+        Vec3 c = lerp(iceLight, iceDeep, 0.5f + 0.5f * noise.fbm(p * 4.0f, 4));
+        c = lerp(c, frost, smoothstep(0.65f, 0.85f, std::fabs(p.y))); // escarcha en los polos
+        return lerp(c, crackColor, std::max(bigCracks, smallCracks * 0.7f));
+    });
+    // Brillo propio de las grietas (el shader lo usa como luz emitida).
+    tex.mask.bake(size, [&](const Vec3& p) {
+        return std::max(crackAt(noise, p, 5.0f, 0.06f), 0.5f * crackAt(noise, p + Vec3{4.0f, 1.0f, 7.0f}, 14.0f, 0.04f));
+    });
+    bakeReliefNormals(tex.normal, size, 0.05f, [&](const Vec3& p) { return glaciaHeight(noise, p); });
+}
+
+// ---------------------------------------------------------------- Vergel
+
+static const float SEA_LEVEL = 0.02f;
+
+// Elevacion del terreno: positiva = tierra, menor que SEA_LEVEL = mar.
+static float vergelElevation(const Noise& noise, const Vec3& p) {
+    return noise.fbm(p * 1.6f, 6) + 0.12f * noise.fbm(p * 7.0f, 3);
+}
+
+void bakeVergel(PlanetTextures& tex, unsigned seed, int size) {
+    Noise noise(seed);
+    const Vec3 deep{0.02f, 0.09f, 0.28f}, shallow{0.05f, 0.33f, 0.52f}, beach{0.84f, 0.78f, 0.55f};
+    const Vec3 grass{0.27f, 0.56f, 0.19f}, forest{0.09f, 0.33f, 0.12f};
+    const Vec3 rock{0.46f, 0.42f, 0.38f}, snow{0.94f, 0.95f, 0.97f};
+
+    tex.color.bake(size, [&](const Vec3& p) {
+        float e = vergelElevation(noise, p);
+        Vec3 c;
+        if (e < SEA_LEVEL) {
+            c = lerp(deep, shallow, smoothstep(-0.25f, SEA_LEVEL, e)); // mas claro cerca de la costa
+        } else if (e < SEA_LEVEL + 0.025f) {
+            c = beach;
+        } else {
+            float woods = smoothstep(-0.1f, 0.2f, noise.fbm(p * 5.0f + Vec3{9.0f, 3.0f, 1.0f}, 3));
+            c = lerp(grass, forest, woods);
+            c = lerp(c, rock, smoothstep(0.22f, 0.32f, e));
+            c = lerp(c, snow, smoothstep(0.36f, 0.42f, e));
+        }
+        // Casquetes de hielo en los polos.
+        return lerp(c, snow, smoothstep(0.82f, 0.9f, std::fabs(p.y) + 0.05f * noise.fbm(p * 8.0f, 2)));
+    });
+    tex.mask.bake(size, [&](const Vec3& p) { return vergelElevation(noise, p) < SEA_LEVEL ? 1.0f : 0.0f; });
+    // El mar es plano: el relieve solo cuenta sobre el nivel del mar.
+    bakeReliefNormals(tex.normal, size, 0.05f,
+                      [&](const Vec3& p) { return std::max(SEA_LEVEL, vergelElevation(noise, p)); });
+    // Nubes: ruido deformado con otro ruido para que se vean como remolinos.
+    tex.clouds.bake(size / 2, [&](const Vec3& p) {
+        Vec3 warp{noise.fbm(p * 2.0f, 3), noise.fbm(p * 2.0f + Vec3{5.2f, 1.3f, 2.8f}, 3), 0.0f};
+        float c = noise.fbm(p * 3.0f + warp * 1.5f + Vec3{20.0f, 0.0f, 0.0f}, 5);
+        return smoothstep(0.02f, 0.3f, c);
     });
 }
 
