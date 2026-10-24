@@ -90,6 +90,15 @@ inline Mat4 translate(const Vec3& t) {
     return r;
 }
 
+// Escala distinta por eje (solo para la llama, que no usa la normal).
+inline Mat4 scale3(const Vec3& s) {
+    Mat4 r = Mat4::identity();
+    r.m[0][0] = s.x;
+    r.m[1][1] = s.y;
+    r.m[2][2] = s.z;
+    return r;
+}
+
 inline Mat4 scale(float s) {
     Mat4 r = Mat4::identity();
     r.m[0][0] = r.m[1][1] = r.m[2][2] = s;

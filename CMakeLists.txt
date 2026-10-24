@@ -35,6 +35,7 @@ add_executable(galaxia
     src/scene.cpp
     src/shaders.cpp
     src/ship.cpp
+    src/spacekit.cpp
     src/texture.cpp
 )
 
