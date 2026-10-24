@@ -150,11 +150,13 @@ int main(int argc, char* argv[]) {
     //   --fly "w:3,wa:2"          antes de la captura, vuela con ese guion de teclas
     //   --look yaw pitch          vista libre de la camara (grados)
     //   --no-opt                  sin descarte de objetos ni LOD (para comparar)
+    //   --near N                  empieza frente al lado de dia del cuerpo N (1 = Duna, 2 = Glacia...)
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
     std::string flightScript;
     bool dtTest = false;
+    int nearBody = -1;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
@@ -165,6 +167,7 @@ int main(int argc, char* argv[]) {
             lookPitchDeg = (float)std::atof(argv[++i]);
         }
         else if (std::strcmp(argv[i], "--no-opt") == 0) opt.cullObjects = opt.autoLod = false;
+        else if (std::strcmp(argv[i], "--near") == 0 && i + 1 < argc) nearBody = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
 
@@ -211,6 +214,14 @@ int main(int argc, char* argv[]) {
     u.projection = perspective(radians(FOV_DEG), (float)RENDER_WIDTH / RENDER_HEIGHT, Z_NEAR, Z_FAR);
 
     Ship ship = makeStartShip(scene, elapsed);
+    if (nearBody > 0 && nearBody < (int)scene.bodies.size()) {
+        // Del lado del sol (de dia), a 3 radios del centro y mirando al planeta.
+        const CelestialBody& b = scene.bodies[nearBody];
+        Vec3 center = b.position(elapsed);
+        Vec3 towardSun = normalize(scene.sunPosition(elapsed) - center);
+        ship.position = center + normalize(towardSun + Vec3{0.0f, 0.3f, 0.0f}) * (b.radius * 3.0f);
+        ship.lookAt(center);
+    }
     ChaseCamera camera;
     camera.snapTo(ship);
 
@@ -219,7 +230,8 @@ int main(int argc, char* argv[]) {
     // recorrido el carro alrededor del planeta (360 = una vuelta completa).
     if (screenshotPath) {
         float degreesAround = 0.0f;
-        Vec3 prevDir = normalize(ship.position - scene.bodies[1].position(elapsed));
+        const CelestialBody& around = scene.bodies[nearBody > 0 ? nearBody : 1];
+        Vec3 prevDir = normalize(ship.position - around.position(elapsed));
         for (const auto& seg : parseFlightScript(flightScript)) {
             ShipInput in = inputFromString(seg.first);
             if (seg.first.find('f') != std::string::npos) ship.surfaceEnabled = !ship.surfaceEnabled;
@@ -228,7 +240,7 @@ int main(int argc, char* argv[]) {
                 ship.update(in, 1.0f / 60.0f, collidersAt(scene, elapsed));
                 camera.update(ship, 1.0f / 60.0f, false, 0, 0);
                 elapsed += 1.0f / 60.0f;
-                Vec3 dir = normalize(ship.position - scene.bodies[1].position(elapsed));
+                Vec3 dir = normalize(ship.position - around.position(elapsed));
                 degreesAround += std::acos(clampf(dot(prevDir, dir), -1.0f, 1.0f)) * 180.0f / PI;
                 prevDir = dir;
             }
