@@ -5,7 +5,7 @@
 // de raylib: solo calcula el ojo, el objetivo y el "arriba" para armar la
 // matriz de vista con lookAt().
 struct ChaseCamera {
-    float distance = 5.0f;     // detras del carro
+    float distance = 5.0f;     // detras del carro (rueda del raton: 2 a 12)
     float height = 1.4f;       // arriba del carro
     float speedZoom = 0.05f;   // distancia extra por unidad de velocidad
     float followRate = 7.0f;   // que tan rapido alcanza la posicion deseada

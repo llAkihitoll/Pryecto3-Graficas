@@ -25,7 +25,7 @@ struct HudInfo {
     std::string nearName;
     float altitude = 0;
     bool surfaceMode = false, surfaceEnabled = true;
-    bool gravity = true, relief = true;
+    bool gravity = true, relief = true, normalMapping = true;
     Optimizations opt;
     RenderStats stats;
     unsigned seed = 0;

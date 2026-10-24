@@ -40,7 +40,12 @@ void setupCarMaterials(Mesh& car) {
         else if (m.name == "Window") { m.color = Vec3{0.03f, 0.04f, 0.06f}; m.specular = 0.9f; m.shininess = 96.0f; }
         else if (m.name == "Headlights") { m.emissive = 1.0f; }
         else if (m.name == "Alpha Rim") { m.specular = 0.8f; m.shininess = 64.0f; }
-        else { m.specular = 0.15f; m.shininess = 16.0f; } // chasis, pintura negra, llantas
+        else if (m.name == "Dieci Tread") {
+            // Llantas: el dibujo de la banda es muy fino para el tamano en
+            // pantalla; con menos intensidad no se ve tan granulado.
+            m.specular = 0.15f; m.shininess = 16.0f; m.normalStrength = 0.6f;
+        }
+        else { m.specular = 0.15f; m.shininess = 16.0f; } // chasis y pintura negra
     }
 }
 
@@ -157,25 +162,29 @@ int main(int argc, char* argv[]) {
     //   --time s                  adelanta la simulacion de los planetas
     //   --fly "w:3,wa:2"          antes de la captura, vuela con ese guion de teclas
     //   --look yaw pitch          vista libre de la camara (grados)
+    //   --zoom D                  distancia de la camara al carro
     //   --no-opt                  sin descarte de objetos ni LOD (para comparar)
     //   --near N                  empieza frente al lado de dia del cuerpo N (1 = Duna, 2 = Glacia...)
     //   --seed N                  semilla para repartir los objetos de superficie
     //   --flat                    Duna sin deformar (esfera), para comparar
     //   --hide-help               empieza sin el panel de controles
+    //   --no-normal-map           sin mapas de normales en el carro, para comparar
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
-    float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
+    float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f, zoom = 0.0f;
     std::string flightScript;
     bool dtTest = false;
     int nearBody = -1;
     unsigned propSeed = 2026;
     bool flatTerrain = false;
     bool showHelp = true;
+    bool noNormalMap = false;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
         else if (std::strcmp(argv[i], "--time") == 0 && i + 1 < argc) elapsed = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--fly") == 0 && i + 1 < argc) flightScript = argv[++i];
+        else if (std::strcmp(argv[i], "--zoom") == 0 && i + 1 < argc) zoom = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--look") == 0 && i + 2 < argc) {
             lookYawDeg = (float)std::atof(argv[++i]);
             lookPitchDeg = (float)std::atof(argv[++i]);
@@ -185,6 +194,7 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--seed") == 0 && i + 1 < argc) propSeed = (unsigned)std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--flat") == 0) flatTerrain = true;
         else if (std::strcmp(argv[i], "--hide-help") == 0) showHelp = false;
+        else if (std::strcmp(argv[i], "--no-normal-map") == 0) noNormalMap = true;
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
 
@@ -232,6 +242,7 @@ int main(int argc, char* argv[]) {
     fb.setClearColor(Color{4, 5, 14});
 
     Uniforms u;
+    u.normalMapping = !noNormalMap;
     u.projection = perspective(radians(FOV_DEG), (float)RENDER_WIDTH / RENDER_HEIGHT, Z_NEAR, Z_FAR);
 
     Ship ship = makeStartShip(scene, elapsed);
@@ -274,6 +285,7 @@ int main(int argc, char* argv[]) {
         }
         camera.lookYaw = radians(lookYawDeg);
         camera.lookPitch = radians(lookPitchDeg);
+        if (zoom > 0.0f) camera.distance = zoom;
         camera.snapTo(ship);
         camera.keepOutside(collidersAt(scene, elapsed));
     }
@@ -310,6 +322,10 @@ int main(int argc, char* argv[]) {
                 mouseDx += (float)event.motion.xrel;
                 mouseDy += (float)event.motion.yrel;
             }
+            // Rueda del raton: acercar o alejar la camara del carro (para ver detalles).
+            if (event.type == SDL_MOUSEWHEEL) {
+                camera.distance = clampf(camera.distance * (event.wheel.y > 0 ? 0.85f : 1.15f), 2.0f, 12.0f);
+            }
             if (event.type == SDL_KEYDOWN) {
                 switch (event.key.keysym.sym) {
                     case SDLK_ESCAPE: running = false; break;
@@ -317,6 +333,7 @@ int main(int argc, char* argv[]) {
                     case SDLK_o: opt.cullObjects = !opt.cullObjects; break;
                     case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
                     case SDLK_v: ship.gravityEnabled = !ship.gravityEnabled; break;
+                    case SDLK_m: u.normalMapping = !u.normalMapping; break;
                     case SDLK_h:
                         showHelp = !showHelp;
                         helpTouched = true;
@@ -420,6 +437,7 @@ int main(int argc, char* argv[]) {
         hud.surfaceEnabled = ship.surfaceEnabled;
         hud.gravity = ship.gravityEnabled;
         hud.relief = scene.deformTerrain;
+        hud.normalMapping = u.normalMapping;
         hud.opt = opt;
         hud.stats = stats;
         hud.seed = scene.propSeed;
