@@ -117,6 +117,70 @@ Vec3 glaciaShader(const Fragment& f, const Uniforms& u) {
     return albedo * (0.05f + 0.9f * diffuse) + Vec3{1, 1, 1} * spec + fresnel + glow;
 }
 
+Vec3 aureliaShader(const Fragment& f, const Uniforms& u) {
+    Vec3 dir = normalize(f.localPos);
+    // Rotacion diferencial: la velocidad de giro cambia con la latitud.
+    float speed = 0.05f + 0.04f * std::sin(dir.y * 9.0f); // radianes por segundo
+    float a = u.time * speed;
+    float c = std::cos(a), s = std::sin(a);
+    Vec3 albedo = u.textures->color.sample(Vec3{dir.x * c - dir.z * s, dir.y, dir.x * s + dir.z * c});
+
+    Vec3 geo = f.normal;
+    Vec3 toLight = normalize(u.lightPos - f.worldPos);
+    Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
+    float day = smoothstep(-0.1f, 0.2f, dot(geo, toLight));
+    float diffuse = std::max(0.0f, dot(geo, toLight)) * day;
+
+    // Un planeta de gas se ve mas oscuro en el borde (la luz atraviesa mas nube).
+    float facing = std::max(0.0f, dot(geo, toCamera));
+    albedo = albedo * (0.6f + 0.4f * std::sqrt(facing));
+    float edge = 1.0f - facing;
+    Vec3 haze = Vec3{1.0f, 0.8f, 0.55f} * (edge * edge * edge * (0.1f + 0.9f * day) * 0.5f);
+    return albedo * (0.04f + diffuse) + haze;
+}
+
+Vec3 ringShader(const Fragment& f, const Uniforms& u) {
+    const Material& m = *f.material;
+    // Vetas finas: dos senos de distinta frecuencia segun la distancia al centro.
+    float r = std::sqrt(f.localPos.x * f.localPos.x + f.localPos.z * f.localPos.z);
+    float streaks = 0.75f + 0.25f * std::sin(r * 90.0f) * std::sin(r * 37.0f + 1.3f);
+
+    Vec3 toLight = normalize(u.lightPos - f.worldPos);
+    // El anillo es delgado y dispersa luz: se ilumina por las dos caras.
+    float light = 0.25f + 0.75f * std::fabs(dot(f.normal, toLight));
+
+    // Sombra del planeta: rayo del punto hacia el sol contra su esfera.
+    Vec3 oc = f.worldPos - u.objectCenter;
+    float b = dot(oc, toLight);
+    float c = dot(oc, oc) - u.objectRadius * u.objectRadius;
+    if (b < 0.0f && b * b - c > 0.0f) light *= 0.15f;
+
+    return m.color * (streaks * light);
+}
+
+Vec3 ignisShader(const Fragment& f, const Uniforms& u) {
+    Vec3 dir = normalize(f.localPos);
+    Vec3 albedo = u.textures->color.sample(dir);
+    float lava = u.textures->mask.sample(dir);
+    Vec3 n = normalize(u.model.transformDir(u.textures->normal.sample(dir)));
+    Vec3 geo = f.normal;
+
+    Vec3 toLight = normalize(u.lightPos - f.worldPos);
+    Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
+    float day = smoothstep(-0.1f, 0.2f, dot(geo, toLight));
+    Vec3 rock = albedo * (0.05f + std::max(0.0f, dot(n, toLight)) * day);
+
+    // Pulsos de calor que avanzan por la lava (una onda que depende del
+    // punto y del tiempo). La lava brilla igual de dia y de noche.
+    float flow = 0.5f + 0.5f * std::sin(u.time * 2.5f + (dir.x + dir.y * 1.3f + dir.z * 0.7f) * 25.0f);
+    float heat = lava * (0.65f + 0.35f * flow);
+    Vec3 lavaColor = lerp(Vec3{0.6f, 0.05f, 0.0f}, Vec3{1.0f, 0.75f, 0.2f}, heat * heat);
+
+    float edge = 1.0f - std::max(0.0f, dot(geo, toCamera));
+    Vec3 smoke = Vec3{0.9f, 0.3f, 0.1f} * (edge * edge * edge * 0.5f);
+    return rock + lavaColor * (heat * 1.3f) + smoke;
+}
+
 Vec3 propShader(const Fragment& f, const Uniforms& u) {
     const Material& m = *f.material;
     Vec3 toLight = normalize(u.lightPos - f.worldPos);

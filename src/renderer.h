@@ -18,6 +18,7 @@ struct Uniforms {
     // calcula una vez por cuadro para no hacer senos y cosenos por pixel.
     Mat4 textureMotion = Mat4::identity();
     Vec3 objectCenter; // centro del planeta sobre el que estan los objetos de superficie
+    float objectRadius = 0.0f; // radio de ese planeta (para la sombra sobre los anillos)
 };
 
 // Lo que recibe el shader de fragmentos por cada pixel cubierto. worldPos,

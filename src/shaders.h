@@ -26,6 +26,20 @@ Vec3 glaciaShader(const Fragment& f, const Uniforms& u);
 // nubes que se mueve sobre la superficie y atmosfera azul en el borde.
 Vec3 vergelShader(const Fragment& f, const Uniforms& u);
 
+// Aurelia: gigante gaseoso. Rotacion diferencial: cada latitud gira a su
+// propia velocidad (la textura se lee girada segun el tiempo), asi las
+// bandas se deslizan entre si. Oscurecimiento del borde y bruma calida.
+Vec3 aureliaShader(const Fragment& f, const Uniforms& u);
+
+// Anillos de Aurelia: vetas finas segun la distancia al centro, iluminados
+// por las dos caras y con la sombra del planeta (rayo hacia el sol contra la
+// esfera del planeta).
+Vec3 ringShader(const Fragment& f, const Uniforms& u);
+
+// Ignis: roca volcanica con relieve y lava con luz propia; pulsos de calor
+// que avanzan por la lava con el tiempo, y humo anaranjado en el borde.
+Vec3 ignisShader(const Fragment& f, const Uniforms& u);
+
 // Objetos de superficie: Lambert + brillo con el color del material, luz
 // propia (cristales, la luz de la baliza) y sombra del planeta: si el sol
 // esta debajo del horizonte del objeto, no lo ilumina.
