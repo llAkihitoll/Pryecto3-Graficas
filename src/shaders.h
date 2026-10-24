@@ -42,9 +42,9 @@ Vec3 ringShader(const Fragment& f, const Uniforms& u);
 // que avanzan por la lava con el tiempo, y humo anaranjado en el borde.
 Vec3 ignisShader(const Fragment& f, const Uniforms& u);
 
-// Llama del propulsor: brilla sola (sin luz del sol), blanca amarillenta en
-// la tobera, del color de la llama en el medio y oscura en la punta, con un
-// parpadeo rapido que cambia con el tiempo.
+// Llama de cohete del boost: brilla sola (sin luz del sol). Nucleo blanco
+// amarillento en el centro de la silueta y cerca del escape, naranja hacia
+// los bordes y rojo oscuro en la punta, con pulsos que viajan hacia atras.
 Vec3 flameShader(const Fragment& f, const Uniforms& u);
 
 // Objetos de superficie: Lambert + brillo con el color del material, luz

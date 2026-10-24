@@ -250,6 +250,25 @@ int main(int argc, char* argv[]) {
 
     Ship ship = makeStartShip(scene, elapsed);
     ShipInput lastInput; // teclas del ultimo cuadro, para predecir la trayectoria
+
+    // Estela del boost: mientras haya boost, cada escape suelta particulas
+    // hacia atras; como quedan en el mundo, forman un rastro detras del carro.
+    BoostTrail trail;
+    const Vec3 exhausts[2] = {EXHAUST_LEFT, EXHAUST_RIGHT};
+    Vec3 lastExhaust[2];      // donde estaban los escapes en el cuadro anterior
+    bool wasBoosting = false;
+    auto updateTrail = [&](float step) {
+        if (ship.boosting) {
+            Mat4 carMatrix = ship.modelMatrix();
+            for (int i = 0; i < 2; ++i) {
+                Vec3 now = carMatrix.transformPoint(exhausts[i]);
+                trail.emit(wasBoosting ? lastExhaust[i] : now, now, ship.forward * -6.0f, step);
+                lastExhaust[i] = now;
+            }
+        }
+        wasBoosting = ship.boosting;
+        trail.update(step);
+    };
     if (nearBody > 0 && nearBody < (int)scene.bodies.size()) {
         // Del lado del sol (de dia), a 3 radios del centro y mirando al planeta.
         const CelestialBody& b = scene.bodies[nearBody];
@@ -276,6 +295,7 @@ int main(int argc, char* argv[]) {
             int frames = (int)(seg.second * 60.0f + 0.5f);
             for (int i = 0; i < frames; ++i) {
                 ship.update(in, 1.0f / 60.0f, collidersAt(scene, elapsed));
+                updateTrail(1.0f / 60.0f);
                 camera.update(ship, 1.0f / 60.0f, false, 0, 0);
                 elapsed += 1.0f / 60.0f;
                 Vec3 dir = normalize(ship.position - around.position(elapsed));
@@ -364,6 +384,7 @@ int main(int argc, char* argv[]) {
             std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
             lastInput = readKeyboard();
             ship.update(lastInput, dt, colliders);
+            updateTrail(dt);
             camera.update(ship, dt, looking, mouseDx, mouseDy);
             camera.keepOutside(colliders);
         }
@@ -430,6 +451,10 @@ int main(int argc, char* argv[]) {
             std::snprintf(label, sizeof(label), "%s %.0f", b.name.c_str(), dist);
             drawText(fb, sx - textWidth(label) / 2, sy, label, 0xFFD8E0F0);
         }
+
+        // La estela se dibuja despues de toda la escena 3D (usa su profundidad
+        // para que los planetas la tapen) y antes del HUD.
+        trail.draw(fb, u);
 
         // HUD con texto: navegacion, contadores del renderizador y ayuda.
         float speed = length(ship.velocity);

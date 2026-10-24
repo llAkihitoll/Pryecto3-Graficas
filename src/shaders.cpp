@@ -194,12 +194,29 @@ Vec3 ignisShader(const Fragment& f, const Uniforms& u) {
 }
 
 Vec3 flameShader(const Fragment& f, const Uniforms& u) {
-    float t = clampf(f.localPos.z, 0.0f, 1.0f); // 0 en la tobera, 1 en la punta
-    float flicker = 0.85f + 0.15f * std::sin(u.time * 45.0f + t * 12.0f);
-    Vec3 core{1.0f, 0.95f, 0.8f};
-    Vec3 c = lerp(core, f.material->color, smoothstep(0.0f, 0.45f, t));
-    c = lerp(c, f.material->color * 0.25f, smoothstep(0.6f, 1.0f, t));
-    return c * flicker;
+    float t = clampf(f.localPos.z, 0.0f, 1.0f); // 0 en el escape, 1 en la punta
+    Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
+
+    // Nucleo caliente: el penacho se ve mas brillante donde se mira "a
+    // traves" de mas fuego, o sea en el centro de la silueta (la direccion
+    // radial apunta a la camara) o cuando se mira a lo largo del eje. Se usa
+    // la direccion radial de la posicion local en vez de la normal porque la
+    // llama se escala distinto en cada eje y eso deforma las normales.
+    Vec3 radial = normalize(u.model.transformDir(Vec3{f.localPos.x, f.localPos.y, 0.0f}));
+    Vec3 axis = normalize(u.model.transformDir(Vec3{0.0f, 0.0f, 1.0f}));
+    float core = std::max(std::fabs(dot(radial, toCamera)), std::fabs(dot(axis, toCamera)));
+    core *= core;
+
+    // Pulsos de presion que viajan del escape hacia la punta.
+    float pulse = 0.8f + 0.2f * std::sin(t * 22.0f - u.time * 50.0f);
+
+    // Calor: maximo en el centro y cerca del escape, se enfria hacia la punta.
+    float heat = core * (1.0f - 0.8f * t);
+    const Vec3 hot{1.0f, 0.95f, 0.8f};
+    const Vec3& mid = f.material->color;
+    Vec3 cool = mid * 0.3f;
+    Vec3 c = heat > 0.5f ? lerp(mid, hot, (heat - 0.5f) * 2.0f) : lerp(cool, mid, heat * 2.0f);
+    return c * (pulse * (1.1f - 0.5f * t));
 }
 
 Vec3 propShader(const Fragment& f, const Uniforms& u) {
