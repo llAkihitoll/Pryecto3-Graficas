@@ -66,7 +66,7 @@ struct ShipTuning {
     float alignRate = 3.5f;        // que tan rapido el carro se endereza con el planeta
 
     // Gravedad
-    float gravityDrag = 0.08f;     // perdida lenta de la deriva por gravedad (por segundo)
+    float gravityDrag = 0.12f;     // perdida lenta de la deriva por gravedad (por segundo)
     float gravitySurfaceDecay = 3.0f; // en modo superficie la deriva se apaga rapido
 };
 
