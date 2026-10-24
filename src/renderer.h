@@ -33,6 +33,8 @@ using FragmentShader = Vec3 (*)(const Fragment&, const Uniforms&);
 
 // Contadores para verificar cuanto trabajo hace el renderizador.
 struct RenderStats {
+    int objectsDrawn = 0;   // objetos que pasaron el descarte
+    int objectsCulled = 0;  // objetos descartados por estar fuera de la vista
     int trianglesIn = 0;    // triangulos enviados
     int trianglesDrawn = 0; // triangulos que llegaron a rasterizarse
     long long pixelsShaded = 0;
@@ -44,3 +46,17 @@ struct RenderStats {
 // contra el plano cercano -> division de perspectiva -> pantalla -> raster
 // con prueba de profundidad -> shader de fragmentos.
 void drawMesh(Framebuffer& fb, const Mesh& mesh, const Uniforms& u, FragmentShader shader, RenderStats& stats);
+
+// Optimizaciones que se pueden apagar para comparar el trabajo (teclas O y L).
+struct Optimizations {
+    bool cullObjects = true; // descartar objetos fuera de la vista
+    bool autoLod = true;     // elegir el nivel de detalle segun la distancia
+};
+
+// Descarte de objetos: true si la esfera (centro en el mundo, radio) toca el
+// volumen de vision de la camara descrita por u.view y u.projection.
+bool sphereInFrustum(const Uniforms& u, const Vec3& center, float radius);
+
+// Cuantos pixeles de radio ocupa en pantalla una esfera: depende de su
+// tamano y de su distancia a la camara. Se usa para elegir el nivel de detalle.
+float projectedRadius(const Uniforms& u, const Vec3& center, float radius, int screenHeight);

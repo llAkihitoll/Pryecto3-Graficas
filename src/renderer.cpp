@@ -182,6 +182,33 @@ static void clipAndSetup(const ClipVertex& a, const ClipVertex& b, const ClipVer
     }
 }
 
+bool sphereInFrustum(const Uniforms& u, const Vec3& center, float radius) {
+    // Los 6 planos del volumen de vision salen de las filas de P * V
+    // (metodo de Gribb y Hartmann): fila 3 +/- fila 0 = izquierda/derecha,
+    // +/- fila 1 = abajo/arriba, +/- fila 2 = cerca/lejos.
+    Mat4 m = u.projection * u.view;
+    for (int row = 0; row < 3; ++row) {
+        for (int sign = -1; sign <= 1; sign += 2) {
+            float a = m.m[3][0] + sign * m.m[row][0];
+            float b = m.m[3][1] + sign * m.m[row][1];
+            float c = m.m[3][2] + sign * m.m[row][2];
+            float d = m.m[3][3] + sign * m.m[row][3];
+            float len = std::sqrt(a * a + b * b + c * c);
+            // Distancia con signo del centro al plano: si esta mas afuera que
+            // el radio, la esfera completa queda del lado invisible.
+            if ((a * center.x + b * center.y + c * center.z + d) / len < -radius) return false;
+        }
+    }
+    return true;
+}
+
+float projectedRadius(const Uniforms& u, const Vec3& center, float radius, int screenHeight) {
+    float dist = length(center - u.cameraPos);
+    if (dist <= radius) return 1e9f; // la camara esta adentro o tocandola
+    // projection.m[1][1] = 1 / tan(fov / 2): convierte la pendiente a NDC.
+    return radius / dist * u.projection.m[1][1] * screenHeight * 0.5f;
+}
+
 void drawMesh(Framebuffer& fb, const Mesh& mesh, const Uniforms& u, FragmentShader shader, RenderStats& stats) {
     ThreadPool& pool = threadPool();
     const int W = fb.width(), H = fb.height();
