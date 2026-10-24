@@ -125,7 +125,7 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `A` / `D` | Girar a la izquierda / derecha |
 | `↑` / `↓` | En vuelo libre: subir o bajar la nariz. En modo superficie: subir o bajar de altitud |
 | `Q` / `E` | Rodar sobre el eje del carro (como el air roll de Rocket League) |
-| `Shift` | Boost: sale fuego de los escapes del carro; dura 3 s y se recarga solo |
+| `Shift` | Boost: sale fuego de cohete de los escapes del carro y deja una estela; dura 3 s y se recarga solo |
 | `Espacio` | Freno fuerte que también detiene los giros y la deriva por gravedad |
 | Botón derecho + ratón | Mirar alrededor del carro. Al soltar, la cámara vuelve atrás |
 | Rueda del ratón | Acercar o alejar la cámara del carro |
@@ -201,7 +201,7 @@ src/
   ship.*              Física del carro: control, modo superficie, gravedad, colisión
   camera.*            Cámara de persecución
   hud.*, font.*       HUD y fuente propia de 5x7 píxeles
-  boost_flame.*       Llama del boost que sale de los escapes del Fennec
+  boost_flame.*       Llama de cohete del boost (escapes del Fennec) y estela de partículas
   mesh_builder.h      Ayudante para construir modelos en código con caras planas
 ```
 
@@ -250,8 +250,20 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `ringShader` | Anillos | Vetas finas según la distancia al centro, luz por las dos caras y **sombra del planeta** (rayo hacia el sol contra su esfera) |
 | `ignisShader` | Volcánico | Roca con relieve y lava emisiva con pulsos de calor que avanzan con el tiempo |
 | `carShader` | Carro | Blinn-Phong con los materiales del modelo, **mapeo de normales en espacio tangente** (chasis, rines y llantas), borde Fresnel y faros emisivos |
-| `flameShader` | Llama del boost | Emisiva: blanca en el escape, del color de la llama en el medio y oscura en la punta, con parpadeo según el tiempo |
+| `flameShader` | Llama del boost | Emisiva. **Núcleo caliente** donde se mira a través de más fuego (centro de la silueta o a lo largo del eje), naranja en los bordes y rojo en la punta; pulsos que viajan hacia atrás con el tiempo |
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
+
+### Boost: llama de cohete y estela ([boost_flame.cpp](src/boost_flame.cpp))
+
+- **Llama:** un penacho generado por revolución (se ensancha al salir del escape y se afila) en
+  cada uno de los dos escapes del Fennec, con `flameShader`.
+- **Estela:** mientras hay boost, cada escape suelta 400 partículas por segundo que quedan en el
+  mundo y viven ~0.6 s. Nacen blancas amarillas, pasan a naranja y rojo y terminan como humo gris
+  mientras crecen. Para que la estela salga continua aunque el carro vaya rápido, cada partícula
+  nace en el punto del camino del escape que corresponde a su instante dentro del cuadro.
+- **Dibujo:** cada partícula es un disco proyectado con `P · V` que pasa por la prueba de
+  profundidad (sin escribirla) y se **suma** al color del píxel (mezcla aditiva). Así se ve
+  translúcida sin necesitar transparencia en el pipeline y el orden de dibujo no importa.
 
 ### Mapeo de normales del carro ([texture.cpp](src/texture.cpp), [obj_loader.cpp](src/obj_loader.cpp), [shaders.cpp](src/shaders.cpp))
 
