@@ -1,14 +1,17 @@
 newmtl Alpha Rim
 Kd 0.9063 0.8648 0.5438
+norm ../textures/Alpha_N.png
 
 newmtl Dieci Tread
 Kd 0.0867 0.0867 0.0867
+norm ../textures/NormalMap.png
 
 newmtl Fennec - Body
 Kd 0.0000 0.3928 0.9063
 
 newmtl Fennec Chassis
 Kd 0.1067 0.1050 0.1009
+norm ../textures/Chassis_Grain_N.png
 
 newmtl Headlights
 Kd 1.0000 0.9059 0.9205
