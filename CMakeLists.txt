@@ -25,6 +25,7 @@ add_executable(galaxia
     src/obj_loader.cpp
     src/parallel.cpp
     src/planets.cpp
+    src/props.cpp
     src/renderer.cpp
     src/scene.cpp
     src/shaders.cpp
