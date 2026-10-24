@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include "planets.h"
 #include "renderer.h"
 
 // Un sol o un planeta. Su posicion y rotacion se calculan directamente a
@@ -10,6 +11,7 @@ struct CelestialBody {
     std::string name;
     Mesh mesh;              // esfera unitaria, se escala con el radio
     FragmentShader shader;
+    PlanetTextures textures; // superficie horneada al arrancar
     float radius = 1.0f;
     float orbitRadius = 0.0f; // 0 = se queda en el centro (el sol)
     float orbitPeriod = 0.0f; // segundos para dar una vuelta al sol

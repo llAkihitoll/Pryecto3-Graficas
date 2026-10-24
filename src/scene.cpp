@@ -1,10 +1,14 @@
 #include "scene.h"
 #include <algorithm>
 #include <random>
+#include <utility>
 #include "geometry.h"
 #include "shaders.h"
 
+// Semillas fijas: con la misma semilla se generan las mismas superficies.
 const unsigned STAR_SEED = 2026;
+const unsigned SUN_SEED = 7;
+const unsigned DUNE_SEED = 42;
 const int STAR_COUNT = 1800;
 
 Vec3 CelestialBody::position(float time) const {
@@ -35,18 +39,20 @@ void Scene::build() {
     sun.shader = sunShader;
     sun.radius = 30.0f;
     sun.spinPeriod = 60.0f;
-    bodies.push_back(sun);
+    bakeSun(sun.textures, SUN_SEED, 256);
+    bodies.push_back(std::move(sun));
 
     CelestialBody dune;
     dune.name = "Duna";
     dune.mesh = makeIcosphere(4, Material{"Duna", Vec3{0.85f, 0.55f, 0.32f}});
-    dune.shader = planetShader;
+    dune.shader = duneShader;
     dune.radius = 10.0f;
     dune.orbitRadius = 140.0f;
     dune.orbitPeriod = 240.0f;
     dune.spinPeriod = 40.0f;
     dune.axialTilt = radians(15.0f);
-    bodies.push_back(dune);
+    bakeDune(dune.textures, DUNE_SEED, 512);
+    bodies.push_back(std::move(dune));
 
     // Direcciones uniformes sobre la esfera: z uniforme en [-1, 1] y un
     // angulo uniforme alrededor. La semilla fija da siempre el mismo cielo.
@@ -90,6 +96,8 @@ void Scene::drawStars(Framebuffer& fb, const Uniforms& u) const {
 void Scene::drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats) const {
     for (const CelestialBody& body : bodies) {
         u.model = body.modelMatrix(u.time);
+        u.textures = &body.textures;
         drawMesh(fb, body.mesh, u, body.shader, stats);
     }
+    u.textures = nullptr;
 }
