@@ -1,5 +1,14 @@
 #pragma once
+#include <vector>
 #include "math3d.h"
+
+// Esfera con la que el carro puede chocar (el sol o un planeta).
+struct SphereCollider {
+    Vec3 center;
+    Vec3 velocity;     // velocidad orbital del cuerpo
+    float radius;
+    float zone = 0.0f; // altitud donde empieza el modo de acercamiento (0 = no tiene)
+};
 
 // Teclas que estan presionadas en este momento (las llena main.cpp).
 struct ShipInput {
@@ -27,6 +36,21 @@ struct ShipTuning {
     float stabilize = 3.5f;        // fuerza del frenado con Espacio
     float boostCapacity = 3.0f;    // segundos de boost con el tanque lleno
     float boostRecharge = 0.35f;   // segundos de boost recuperados por segundo
+
+    // Acercamiento a planetas
+    float collisionRadius = 0.8f;  // radio de la esfera que envuelve al carro
+    float bounce = 0.25f;          // cuanto rebota al chocar (0 = nada, 1 = todo)
+    float nearSpeed = 9.0f;        // velocidad maxima pegado a la superficie
+    float nearBoostSpeed = 18.0f;
+    float limitDeceleration = 25.0f;    // que tan rapido baja al nuevo limite
+    float approachDeceleration = 60.0f; // lo mismo, dentro de la zona de un planeta
+
+    // Modo de vuelo de superficie
+    float cruiseAltitude = 4.0f;   // altitud a la que baja solo al entrar a la zona
+    float minAltitude = 1.5f;      // lo mas bajo que se puede fijar con la flecha abajo
+    float climbSpeed = 10.0f;      // unidades/s al subir o bajar con las flechas (a ras del suelo)
+    float climbPerAltitude = 0.6f; // mas alto sube mas rapido, para salir de la zona sin tardar
+    float alignRate = 3.5f;        // que tan rapido el carro se endereza con el planeta
 };
 
 // El Fennec como nave. Guarda su orientacion como tres ejes ortonormales
@@ -44,8 +68,20 @@ struct Ship {
     float boostFuel = 3.0f;
     bool boosting = false;
 
+    // Cuerpo mas cercano (indice en la lista de colisionadores) y altura
+    // sobre su superficie. Se usa para el HUD y la camara.
+    int nearest = -1;
+    float altitude = 0.0f;
+
+    // Modo de vuelo de superficie: cerca de un planeta el carro se alinea con
+    // su vertical y vuela paralelo al suelo, asi avanzar derecho le da la
+    // vuelta al planeta. surfaceEnabled se cambia con la tecla F.
+    bool surfaceEnabled = true;
+    bool surfaceMode = false;  // activo en este momento
+    float holdAltitude = 4.0f; // altitud que mantiene sin tocar las flechas
+
     // Avanza la simulacion dt segundos. Internamente usa pasos fijos.
-    void update(const ShipInput& input, float dt);
+    void update(const ShipInput& input, float dt, const std::vector<SphereCollider>& bodies);
 
     // Velocidad hacia adelante (negativa = reversa).
     float forwardSpeed() const { return dot(velocity, forward); }
@@ -57,6 +93,8 @@ struct Ship {
 
 private:
     float accumulator = 0.0f;
-    void step(const ShipInput& input, float h);
+    void step(const ShipInput& input, float h, const std::vector<SphereCollider>& bodies);
+    void collide(const std::vector<SphereCollider>& bodies);
     void rotate(Vec3 axis, float angle);
+    void alignUpWith(const Vec3& n, float amount);
 };
