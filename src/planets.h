@@ -8,7 +8,7 @@
 struct PlanetTextures {
     CubeMap<Vec3> color;   // color de la superficie (en el sol: granulacion, fase, manchas)
     CubeMap<Vec3> normal;  // normal con relieve, en el espacio del modelo (el sol no la usa)
-    CubeMap<float> mask;   // Glacia: brillo de las grietas. Vergel: 1 = agua
+    CubeMap<float> mask;   // Glacia: brillo de las grietas. Vergel: 1 = agua. Ignis: lava
     CubeMap<float> clouds; // Vergel: densidad de nubes (0..1)
 };
 
@@ -21,6 +21,13 @@ void bakeGlacia(PlanetTextures& tex, unsigned seed, int size);
 // Vergel: continentes verdes, oceanos, montanas nevadas y una capa de nubes.
 void bakeVergel(PlanetTextures& tex, unsigned seed, int size);
 
+// Aurelia: gigante gaseoso con bandas de nubes turbulentas y una tormenta.
+// Solo color: la animacion (bandas que giran a distinta velocidad) la hace el shader.
+void bakeAurelia(PlanetTextures& tex, unsigned seed, int size);
+
+// Ignis: basalto oscuro con rios y lagos de lava (mascara para la luz propia).
+void bakeIgnis(PlanetTextures& tex, unsigned seed, int size);
+
 // Consultas del terreno para decidir donde colocar objetos encima. Se les
 // pasa un Noise creado con la misma semilla que se uso para hornear, asi
 // coinciden con lo que se ve en la textura.
@@ -29,6 +36,7 @@ float duneBaseRelief(const Noise& terrain, const Vec3& p); // negativo = tierras
 float duneCrater(const Noise& terrain, const Vec3& p);     // negativo = dentro de un crater grande
 float glaciaCrack(const Noise& terrain, const Vec3& p);    // 1 = sobre una grieta grande
 float vergelElevation(const Noise& terrain, const Vec3& p);
+float ignisLava(const Noise& terrain, const Vec3& p);      // 1 = lava, 0 = roca
 extern const float VERGEL_SEA_LEVEL;
 
 // Sol: granulacion (celdas de conveccion), una fase por zona para animar

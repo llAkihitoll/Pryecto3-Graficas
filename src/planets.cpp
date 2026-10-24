@@ -164,6 +164,64 @@ void bakeVergel(PlanetTextures& tex, unsigned seed, int size) {
     });
 }
 
+// ---------------------------------------------------------------- Aurelia
+
+void bakeAurelia(PlanetTextures& tex, unsigned seed, int size) {
+    Noise noise(seed);
+    // Paleta de las bandas, de la mas clara a la mas oscura.
+    const Vec3 cream{0.95f, 0.88f, 0.72f}, tan{0.84f, 0.66f, 0.45f};
+    const Vec3 rust{0.70f, 0.40f, 0.24f}, brown{0.45f, 0.28f, 0.18f};
+    const Vec3 stormCenter = normalize(Vec3{0.7f, -0.35f, 0.6f});
+
+    tex.color.bake(size, [&](const Vec3& p) {
+        // Turbulencia: se deforma el punto con ruido antes de leer la latitud,
+        // asi los bordes de las bandas se ven ondulados y con remolinos.
+        Vec3 warp{noise.fbm(p * 3.0f, 4), noise.fbm(p * 3.0f + Vec3{7.0f, 2.0f, 5.0f}, 4), 0.0f};
+        float lat = p.y + warp.y * 0.12f + warp.x * 0.04f;
+        float band = 0.5f + 0.5f * std::sin(lat * 15.0f + noise.fbm(p * 1.5f, 3) * 2.0f);
+        float fine = 0.5f + 0.5f * std::sin(lat * 47.0f + warp.x * 3.0f);
+        Vec3 c = band < 0.5f ? lerp(brown, rust, band * 2.0f) : lerp(tan, cream, (band - 0.5f) * 2.0f);
+        c = c * (0.9f + 0.1f * fine);
+
+        // Gran tormenta ovalada: un remolino rojizo en el hemisferio sur.
+        float d = length(p - stormCenter);
+        float storm = 1.0f - smoothstep(0.08f, 0.22f, d + 0.04f * noise.fbm(p * 12.0f, 2));
+        float swirl = 0.5f + 0.5f * std::sin(d * 60.0f - std::atan2(p.z - stormCenter.z, p.x - stormCenter.x) * 2.0f);
+        c = lerp(c, lerp(Vec3{0.75f, 0.30f, 0.18f}, Vec3{0.95f, 0.65f, 0.45f}, swirl), storm);
+        return c;
+    });
+}
+
+// ---------------------------------------------------------------- Ignis
+
+static float ignisBase(const Noise& noise, const Vec3& p) { return noise.fbm(p * 2.5f, 5); }
+
+float ignisLava(const Noise& noise, const Vec3& p) {
+    // Rios: donde el ruido cruza cero (|fbm| chico) queda una linea fina,
+    // como una red de grietas. Lagos: en las partes mas bajas.
+    Vec3 warp{noise.fbm(p * 2.0f + Vec3{3.0f, 0.0f, 0.0f}, 3), 0.0f, noise.fbm(p * 2.0f + Vec3{0.0f, 0.0f, 9.0f}, 3)};
+    float river = 1.0f - smoothstep(0.015f, 0.05f, std::fabs(noise.fbm(p * 3.0f + warp, 4)));
+    float lake = smoothstep(-0.32f, -0.42f, ignisBase(noise, p));
+    return std::max(river, lake);
+}
+
+void bakeIgnis(PlanetTextures& tex, unsigned seed, int size) {
+    Noise noise(seed);
+    const Vec3 basalt{0.10f, 0.08f, 0.08f}, ash{0.30f, 0.26f, 0.24f}, crust{0.22f, 0.07f, 0.03f};
+
+    tex.color.bake(size, [&](const Vec3& p) {
+        float base = ignisBase(noise, p);
+        Vec3 c = lerp(basalt, ash, smoothstep(0.0f, 0.45f, base)); // ceniza clara en las alturas
+        c = c * (0.85f + 0.15f * noise.fbm(p * 30.0f, 2));
+        return lerp(c, crust, ignisLava(noise, p)); // costra oscura donde hay lava
+    });
+    tex.mask.bake(size, [&](const Vec3& p) { return ignisLava(noise, p); });
+    // La lava queda hundida respecto a la roca que la rodea.
+    bakeReliefNormals(tex.normal, size, 0.05f, [&](const Vec3& p) {
+        return ignisBase(noise, p) * 0.6f - ignisLava(noise, p) * 0.25f;
+    });
+}
+
 // ---------------------------------------------------------------- Sol
 
 void bakeSun(PlanetTextures& tex, unsigned seed, int size) {
