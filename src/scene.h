@@ -18,6 +18,7 @@ struct CelestialBody {
     float axialTilt = 0.0f;   // inclinacion del eje de rotacion (radianes)
 
     Vec3 position(float time) const;
+    Vec3 velocity(float time) const; // derivada de position(): para la colision
     Mat4 modelMatrix(float time) const;
 };
 

@@ -13,6 +13,13 @@ Vec3 CelestialBody::position(float time) const {
     return Vec3{orbitRadius * std::sin(angle), 0.0f, orbitRadius * std::cos(angle)};
 }
 
+Vec3 CelestialBody::velocity(float time) const {
+    if (orbitPeriod <= 0.0f) return Vec3{0, 0, 0};
+    float omega = 2.0f * PI / orbitPeriod; // radianes por segundo
+    float angle = orbitPhase + omega * time;
+    return Vec3{orbitRadius * omega * std::cos(angle), 0.0f, -orbitRadius * omega * std::sin(angle)};
+}
+
 // Orden de las transformaciones (de derecha a izquierda): escalar la esfera
 // unitaria al radio, girarla sobre su eje, inclinar el eje y llevarla a su
 // lugar en la orbita.
