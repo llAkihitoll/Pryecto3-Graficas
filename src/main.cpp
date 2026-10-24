@@ -29,6 +29,9 @@ const float Z_FAR = 5000.0f;
 // para que se vea el lado de dia y el de noche.
 const Vec3 CAR_START{-70.0f, 8.0f, 90.0f};
 
+// Por debajo de este radio en pantalla (pixeles) el carro usa el modelo reducido.
+const float CAR_LOD_PIXELS = 40.0f;
+
 // Ajusta como reacciona cada material del Fennec a la luz.
 void setupCarMaterials(Mesh& car) {
     for (Material& m : car.materials) {
@@ -146,12 +149,13 @@ int main(int argc, char* argv[]) {
     //   --time s                  adelanta la simulacion de los planetas
     //   --fly "w:3,wa:2"          antes de la captura, vuela con ese guion de teclas
     //   --look yaw pitch          vista libre de la camara (grados)
-    //   --lod                     usa el modelo reducido del carro
+    //   --no-opt                  sin descarte de objetos ni LOD (para comparar)
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
     std::string flightScript;
-    bool useLod = false, dtTest = false;
+    bool dtTest = false;
+    Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
         else if (std::strcmp(argv[i], "--time") == 0 && i + 1 < argc) elapsed = (float)std::atof(argv[++i]);
@@ -160,7 +164,7 @@ int main(int argc, char* argv[]) {
             lookYawDeg = (float)std::atof(argv[++i]);
             lookPitchDeg = (float)std::atof(argv[++i]);
         }
-        else if (std::strcmp(argv[i], "--lod") == 0) useLod = true;
+        else if (std::strcmp(argv[i], "--no-opt") == 0) opt.cullObjects = opt.autoLod = false;
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
 
@@ -185,6 +189,8 @@ int main(int argc, char* argv[]) {
         SDL_Quit();
         return 1;
     }
+    const float carRadius = carFull.boundingRadius();
+    bool carUsesLod = false;
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     SDL_Window* window = SDL_CreateWindow("Proyecto 3 - Galaxia", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -265,7 +271,8 @@ int main(int argc, char* argv[]) {
             if (event.type == SDL_KEYDOWN) {
                 switch (event.key.keysym.sym) {
                     case SDLK_ESCAPE: running = false; break;
-                    case SDLK_l: useLod = !useLod; break;
+                    case SDLK_l: opt.autoLod = !opt.autoLod; break;
+                    case SDLK_o: opt.cullObjects = !opt.cullObjects; break;
                     case SDLK_f: ship.surfaceEnabled = !ship.surfaceEnabled; break;
                     case SDLK_b: u.cullBackFaces = !u.cullBackFaces; break;
                     case SDLK_r:
@@ -297,9 +304,18 @@ int main(int argc, char* argv[]) {
         fb.clear();
         stats.reset();
         scene.drawStars(fb, u);
-        scene.drawBodies(fb, u, stats);
-        u.model = ship.modelMatrix();
-        drawMesh(fb, useLod ? carLod : carFull, u, carShader, stats);
+        scene.drawBodies(fb, u, stats, opt);
+
+        // El carro tambien pasa por el descarte y el nivel de detalle: si
+        // se ve pequeno (camara lejos) basta con el modelo reducido.
+        if (!opt.cullObjects || sphereInFrustum(u, ship.position, carRadius)) {
+            stats.objectsDrawn++;
+            carUsesLod = opt.autoLod && projectedRadius(u, ship.position, carRadius, RENDER_HEIGHT) < CAR_LOD_PIXELS;
+            u.model = ship.modelMatrix();
+            drawMesh(fb, carUsesLod ? carLod : carFull, u, carShader, stats);
+        } else {
+            stats.objectsCulled++;
+        }
 
         // HUD: velocidad (cian) y boost (naranja) en la esquina inferior izquierda.
         float speed = length(ship.velocity);
@@ -313,8 +329,11 @@ int main(int argc, char* argv[]) {
 
         if (screenshotPath) {
             fb.savePNG(screenshotPath);
-            std::printf("%s: render %.1f ms, triangulos enviados %d, rasterizados %d | velocidad %.1f, boost %.2f s\n",
-                        screenshotPath, frameMs, stats.trianglesIn, stats.trianglesDrawn, speed, ship.boostFuel);
+            std::printf("%s: render %.1f ms | objetos %d dibujados, %d descartados | triangulos enviados %d, "
+                        "rasterizados %d | LOD (-1 = descartado) Sol %d, Duna %d, carro %s\n",
+                        screenshotPath, frameMs, stats.objectsDrawn, stats.objectsCulled, stats.trianglesIn,
+                        stats.trianglesDrawn, scene.bodies[0].currentLod, scene.bodies[1].currentLod,
+                        carUsesLod ? "reducido" : "completo");
             running = false;
         }
 
@@ -323,13 +342,15 @@ int main(int argc, char* argv[]) {
         framesCounted++;
         titleTimer += dt;
         if (titleTimer >= 0.5f) {
-            char title[256];
+            char title[320];
             const char* nearName = ship.nearest >= 0 ? scene.bodies[ship.nearest].name.c_str() : "-";
             std::snprintf(title, sizeof(title),
-                          "Proyecto 3 - Galaxia | %.0f FPS | velocidad %.1f | boost %.0f%% | %s a %.1f%s | tris %d / raster %d",
+                          "Proyecto 3 - Galaxia | %.0f FPS | vel %.1f | boost %.0f%% | %s a %.1f%s | "
+                          "objetos %d (descartados %d) | tris %d / raster %d | descarte %s, LOD %s",
                           framesCounted / titleTimer, speed, 100.0f * ship.boostFuel / ship.tuning.boostCapacity,
-                          nearName, ship.altitude, ship.surfaceMode ? " (superficie)" : "",
-                          stats.trianglesIn, stats.trianglesDrawn);
+                          nearName, ship.altitude, ship.surfaceMode ? " (superficie)" : "", stats.objectsDrawn,
+                          stats.objectsCulled, stats.trianglesIn, stats.trianglesDrawn,
+                          opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no");
             SDL_SetWindowTitle(window, title);
             titleTimer = 0.0f;
             framesCounted = 0;
