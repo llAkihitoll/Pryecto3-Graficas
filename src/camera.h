@@ -11,6 +11,12 @@ struct ChaseCamera {
     float followRate = 7.0f;   // que tan rapido alcanza la posicion deseada
     float lookSensitivity = 0.005f; // radianes por pixel del raton
 
+    // En modo superficie la camara sube y mira por debajo del carro: en un
+    // planeta tan pequeno el horizonte queda muy abajo y si no, no se veria.
+    float surfaceHeight = 3.5f;
+    float surfaceLookDown = 2.5f;  // que tan abajo del carro apunta
+    float surfaceBlend = 0.0f;     // 0 = vuelo libre, 1 = superficie (transicion suave)
+
     Vec3 eye;
     Vec3 target;
     Vec3 up{0, 1, 0};
@@ -22,6 +28,10 @@ struct ChaseCamera {
     // looking = boton derecho presionado; mouseDx/Dy en pixeles.
     void update(const Ship& ship, float dt, bool looking, float mouseDx, float mouseDy);
     void snapTo(const Ship& ship);
+
+    // Si el ojo quedo dentro de un planeta (el carro va pegado a la
+    // superficie), lo saca hasta "margin" unidades sobre ella.
+    void keepOutside(const std::vector<SphereCollider>& bodies, float margin = 0.6f);
     Mat4 view() const { return lookAt(eye, target, up); }
 
 private:

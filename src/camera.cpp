@@ -14,14 +14,32 @@ Vec3 ChaseCamera::desiredOffset(const Ship& ship) const {
     // y pitch hacia arriba/abajo.
     Vec3 back = -ship.forward;
     Vec3 dir = (back * cy + ship.right * sy) * cp + ship.up * sp;
-    return dir * dist + ship.up * height;
+    float h = height + (surfaceHeight - height) * surfaceBlend;
+    return dir * dist + ship.up * h;
+}
+
+// Punto al que mira la camara: un poco arriba del carro en vuelo libre y
+// por debajo de el en modo superficie.
+static Vec3 lookTarget(const Ship& ship, float blend, float lookDown) {
+    float lift = 0.5f + (-lookDown - 0.5f) * blend;
+    return ship.position + ship.up * lift;
 }
 
 void ChaseCamera::snapTo(const Ship& ship) {
+    surfaceBlend = ship.surfaceMode ? 1.0f : 0.0f;
     offset = desiredOffset(ship);
     up = ship.up;
     eye = ship.position + offset;
-    target = ship.position + ship.up * 0.5f;
+    target = lookTarget(ship, surfaceBlend, surfaceLookDown);
+}
+
+void ChaseCamera::keepOutside(const std::vector<SphereCollider>& bodies, float margin) {
+    for (const SphereCollider& b : bodies) {
+        Vec3 d = eye - b.center;
+        float dist = length(d);
+        float minDist = b.radius + margin;
+        if (dist < minDist && dist > 1e-4f) eye = b.center + d * (minDist / dist);
+    }
 }
 
 void ChaseCamera::update(const Ship& ship, float dt, bool looking, float mouseDx, float mouseDy) {
@@ -35,6 +53,9 @@ void ChaseCamera::update(const Ship& ship, float dt, bool looking, float mouseDx
         lookPitch -= lookPitch * k;
     }
 
+    float wanted = ship.surfaceMode ? 1.0f : 0.0f;
+    surfaceBlend += (wanted - surfaceBlend) * approach(2.0f, dt);
+
     // Se suaviza el offset relativo y no la posicion absoluta: asi la
     // camara no se queda atras cuando el carro va muy rapido, pero los
     // giros se sienten suaves.
@@ -43,5 +64,5 @@ void ChaseCamera::update(const Ship& ship, float dt, bool looking, float mouseDx
     up = normalize(up + (ship.up - up) * k);
 
     eye = ship.position + offset;
-    target = ship.position + ship.up * 0.5f;
+    target = lookTarget(ship, surfaceBlend, surfaceLookDown);
 }
