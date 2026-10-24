@@ -17,6 +17,7 @@ find_package(Threads REQUIRED)
 add_executable(galaxia
     src/main.cpp
     src/camera.cpp
+    src/font.cpp
     src/framebuffer.cpp
     src/geometry.cpp
     src/hud.cpp
