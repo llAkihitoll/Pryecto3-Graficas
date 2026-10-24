@@ -19,6 +19,7 @@ public:
     // Escritura directa usada por el rasterizador (sin revisar limites:
     // el rasterizador ya recorta a la pantalla).
     void setPixel(int x, int y, uint32_t argb) { pixels[(size_t)y * w + x] = argb; }
+    uint32_t getPixel(int x, int y) const { return pixels[(size_t)y * w + x]; }
 
     // Profundidad guardada como 1/w (w = distancia a la camara). Un valor
     // mas grande significa mas cerca; 0 es "infinitamente lejos".
