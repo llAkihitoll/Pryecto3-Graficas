@@ -64,3 +64,23 @@ Mesh makeIcosphere(int subdivisions, const Material& material) {
     }
     return mesh;
 }
+
+void displaceSphere(Mesh& mesh, const std::function<float(const Vec3&)>& shape) {
+    for (Vertex& v : mesh.vertices) {
+        Vec3 dir = normalize(v.position);
+        v.position = dir * shape(dir);
+        v.normal = Vec3{0, 0, 0};
+    }
+    // Normal suave: suma de las normales de las caras vecinas (las caras
+    // grandes pesan mas porque el producto cruz es proporcional al area).
+    for (const Triangle& t : mesh.triangles) {
+        const Vec3& a = mesh.vertices[t.a].position;
+        const Vec3& b = mesh.vertices[t.b].position;
+        const Vec3& c = mesh.vertices[t.c].position;
+        Vec3 n = cross(b - a, c - a);
+        mesh.vertices[t.a].normal += n;
+        mesh.vertices[t.b].normal += n;
+        mesh.vertices[t.c].normal += n;
+    }
+    for (Vertex& v : mesh.vertices) v.normal = normalize(v.normal);
+}
