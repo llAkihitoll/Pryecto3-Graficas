@@ -11,6 +11,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package(SDL2 REQUIRED)
+# Hilos para hornear las texturas de los planetas en paralelo.
+find_package(Threads REQUIRED)
 
 add_executable(galaxia
     src/main.cpp
@@ -19,7 +21,10 @@ add_executable(galaxia
     src/geometry.cpp
     src/hud.cpp
     src/mesh.cpp
+    src/noise.cpp
     src/obj_loader.cpp
+    src/parallel.cpp
+    src/planets.cpp
     src/renderer.cpp
     src/scene.cpp
     src/shaders.cpp
@@ -27,6 +32,7 @@ add_executable(galaxia
 )
 
 target_include_directories(galaxia PRIVATE ${SDL2_INCLUDE_DIRS})
+target_link_libraries(galaxia PRIVATE Threads::Threads)
 
 if(TARGET SDL2::SDL2main)
     target_link_libraries(galaxia PRIVATE SDL2::SDL2main)

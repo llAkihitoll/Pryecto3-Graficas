@@ -2,6 +2,8 @@
 #include "framebuffer.h"
 #include "mesh.h"
 
+struct PlanetTextures; // texturas horneadas de un planeta (planets.h)
+
 // Valores que son iguales para toda la malla mientras se dibuja.
 struct Uniforms {
     Mat4 model = Mat4::identity();
@@ -11,12 +13,16 @@ struct Uniforms {
     Vec3 lightPos;      // posicion de la luz (el sol) en el mundo
     float time = 0.0f;  // segundos desde que arranco el programa
     bool cullBackFaces = true;
+    const PlanetTextures* textures = nullptr; // solo para sol y planetas
 };
 
-// Lo que recibe el shader de fragmentos por cada pixel cubierto. worldPos y
-// normal se interpolan con correccion de perspectiva entre los 3 vertices.
+// Lo que recibe el shader de fragmentos por cada pixel cubierto. worldPos,
+// localPos y normal se interpolan con correccion de perspectiva entre los 3
+// vertices. localPos es la posicion en el espacio del modelo: sirve para
+// que una textura gire junto con el planeta.
 struct Fragment {
     Vec3 worldPos;
+    Vec3 localPos;
     Vec3 normal;
     const Material* material;
     int x, y;
