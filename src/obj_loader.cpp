@@ -1,4 +1,5 @@
 #include "obj_loader.h"
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -12,10 +13,16 @@ static std::string trim(const std::string& s) {
     return a == std::string::npos ? "" : s.substr(a, b - a + 1);
 }
 
-// Lee los colores Kd de cada material. Los nombres pueden tener espacios
-// (por ejemplo "Fennec - Body"), por eso se toma el resto de la linea.
+// Las texturas del Fennec vienen de Unreal, que guarda la y de las normales
+// con la convencion de DirectX (al reves que OpenGL/Blender).
+const bool NORMAL_MAPS_FLIP_GREEN = true;
+
+// Lee los colores Kd y los mapas de normales (norm o map_Bump) de cada
+// material. Los nombres pueden tener espacios (por ejemplo "Fennec - Body"),
+// por eso se toma el resto de la linea.
 static void loadMTL(const std::string& path, std::vector<Material>& materials) {
     std::ifstream file(path);
+    std::string dir = path.substr(0, path.find_last_of("/\\") + 1);
     std::string line;
     while (std::getline(file, line)) {
         line = trim(line);
@@ -25,6 +32,9 @@ static void loadMTL(const std::string& path, std::vector<Material>& materials) {
             std::istringstream iss(line.substr(3));
             Vec3& c = materials.back().color;
             iss >> c.x >> c.y >> c.z;
+        } else if ((line.rfind("norm ", 0) == 0 || line.rfind("map_Bump ", 0) == 0) && !materials.empty()) {
+            std::string texFile = trim(line.substr(line.find(' ') + 1));
+            materials.back().normalMap = loadNormalTexture(dir + texFile, NORMAL_MAPS_FLIP_GREEN);
         }
     }
 }
@@ -32,6 +42,40 @@ static void loadMTL(const std::string& path, std::vector<Material>& materials) {
 // Convierte un indice del OBJ (empieza en 1, negativo = desde el final) a base 0.
 static int fixIndex(long idx, size_t count) {
     return idx > 0 ? (int)idx - 1 : (int)count + (int)idx;
+}
+
+void computeTangents(Mesh& mesh) {
+    // Para cada triangulo se busca la direccion en que crecen u (tangente) y
+    // v (bitangente) sobre su superficie: son las T y B que cumplen
+    //   e1 = du1 * T + dv1 * B,   e2 = du2 * T + dv2 * B
+    // (e1, e2 = aristas; du, dv = diferencias de UV). Se acumulan en los
+    // vertices para suavizarlas entre triangulos vecinos.
+    std::vector<Vec3> tan(mesh.vertices.size()), bitan(mesh.vertices.size());
+    for (const Triangle& t : mesh.triangles) {
+        const Vertex& a = mesh.vertices[t.a];
+        const Vertex& b = mesh.vertices[t.b];
+        const Vertex& c = mesh.vertices[t.c];
+        Vec3 e1 = b.position - a.position, e2 = c.position - a.position;
+        float du1 = b.uv.x - a.uv.x, dv1 = b.uv.y - a.uv.y;
+        float du2 = c.uv.x - a.uv.x, dv2 = c.uv.y - a.uv.y;
+        float det = du1 * dv2 - du2 * dv1;
+        if (std::fabs(det) < 1e-12f) continue; // UV degeneradas
+        float r = 1.0f / det;
+        Vec3 T = (e1 * dv2 - e2 * dv1) * r;
+        Vec3 B = (e2 * du1 - e1 * du2) * r;
+        for (int idx : {t.a, t.b, t.c}) {
+            tan[idx] += T;
+            bitan[idx] += B;
+        }
+    }
+    for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+        Vertex& v = mesh.vertices[i];
+        // Gram-Schmidt: se quita la parte de T que va en la direccion de la
+        // normal, para que la base (T, B, N) quede perpendicular.
+        v.tangent = normalize(tan[i] - v.normal * dot(v.normal, tan[i]));
+        // Signo: si cross(N, T) apunta al reves que B, las UV estan espejadas.
+        v.tangentSign = dot(cross(v.normal, v.tangent), bitan[i]) < 0.0f ? -1.0f : 1.0f;
+    }
 }
 
 bool loadOBJ(const std::string& path, Mesh& mesh) {
@@ -44,7 +88,8 @@ bool loadOBJ(const std::string& path, Mesh& mesh) {
     std::string dir = path.substr(0, path.find_last_of("/\\") + 1);
 
     std::vector<Vec3> positions, normals;
-    // Cada par (posicion, normal) distinto se vuelve un Vertex de la malla.
+    std::vector<Vec2> uvs;
+    // Cada combinacion (posicion, uv, normal) distinta se vuelve un Vertex.
     std::unordered_map<uint64_t, int> vertexIndex;
     int currentMaterial = -1;
     bool missingNormals = false;
@@ -71,6 +116,12 @@ bool loadOBJ(const std::string& path, Mesh& mesh) {
             n.y = std::strtof(end, &end);
             n.z = std::strtof(end, &end);
             normals.push_back(n);
+        } else if (s[0] == 'v' && s[1] == 't' && s[2] == ' ') {
+            char* end;
+            Vec2 uv;
+            uv.x = std::strtof(s + 3, &end);
+            uv.y = std::strtof(end, &end);
+            uvs.push_back(uv);
         } else if (s[0] == 'f' && s[1] == ' ') {
             std::vector<int> face;
             const char* t = s + 2;
@@ -79,12 +130,12 @@ bool loadOBJ(const std::string& path, Mesh& mesh) {
                 if (!*t) break;
                 char* end;
                 long vi = std::strtol(t, &end, 10);
-                long ni = 0;
+                long ti = 0, ni = 0;
                 t = end;
                 if (*t == '/') {
                     ++t;
-                    if (*t != '/') { // vt (no se usa todavia)
-                        std::strtol(t, &end, 10);
+                    if (*t != '/') {
+                        ti = std::strtol(t, &end, 10);
                         t = end;
                     }
                     if (*t == '/') {
@@ -97,14 +148,19 @@ bool loadOBJ(const std::string& path, Mesh& mesh) {
 
                 int pv = fixIndex(vi, positions.size());
                 int pn = ni != 0 ? fixIndex(ni, normals.size()) : -1;
+                int pt = ti != 0 ? fixIndex(ti, uvs.size()) : -1;
                 if (pv < 0 || pv >= (int)positions.size()) continue;
                 if (pn >= (int)normals.size()) pn = -1;
+                if (pt >= (int)uvs.size()) pt = -1;
                 if (pn < 0) missingNormals = true;
 
-                uint64_t key = ((uint64_t)(uint32_t)pv << 32) | (uint32_t)(pn + 1);
+                // 21 bits por indice alcanzan para mas de 2 millones de cada uno.
+                uint64_t key = ((uint64_t)(uint32_t)pv << 42) | ((uint64_t)(uint32_t)(pt + 1) << 21) |
+                               (uint64_t)(uint32_t)(pn + 1);
                 auto it = vertexIndex.find(key);
                 if (it == vertexIndex.end()) {
                     Vertex vert{positions[pv], pn >= 0 ? normals[pn] : Vec3{0, 0, 0}};
+                    if (pt >= 0) vert.uv = uvs[pt];
                     it = vertexIndex.emplace(key, (int)mesh.vertices.size()).first;
                     mesh.vertices.push_back(vert);
                 }
@@ -153,5 +209,6 @@ bool loadOBJ(const std::string& path, Mesh& mesh) {
         }
         for (Vertex& v : mesh.vertices) v.normal = normalize(v.normal);
     }
+    if (!uvs.empty()) computeTangents(mesh);
     return !mesh.triangles.empty();
 }
