@@ -60,6 +60,7 @@ static DuneSample duneAt(const Noise& noise, const Vec3& p) {
     return s;
 }
 
+float duneHeight(const Noise& terrain, const Vec3& p) { return duneAt(terrain, p).height; }
 float duneBaseRelief(const Noise& terrain, const Vec3& p) { return duneAt(terrain, p).base; }
 float duneCrater(const Noise& terrain, const Vec3& p) { return duneAt(terrain, p).craterBig; }
 

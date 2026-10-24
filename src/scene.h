@@ -13,7 +13,11 @@ struct CelestialBody {
     // Niveles de detalle: la misma esfera unitaria con mas o menos
     // subdivisiones. lods[0] es la mas detallada.
     std::vector<Mesh> lods;
+    std::vector<Mesh> sphereLods; // si esta deformado: las mismas esferas sin deformar (tecla G)
     mutable int currentLod = 0; // el que se uso en el ultimo cuadro (-1 = descartado)
+    // Forma del planeta: distancia al centro (en radios) segun la direccion.
+    // Vacia = esfera perfecta. Duna la usa para hundir los crateres.
+    std::function<float(const Vec3&)> shape;
     FragmentShader shader;
     PlanetTextures textures; // superficie horneada al arrancar
     float radius = 1.0f;
@@ -30,7 +34,8 @@ struct CelestialBody {
     int propCount = 0;
     float propHeight = 0.0f; // lo mas alto que sobresalen, para el descarte
 
-    // Crea los niveles de detalle (de 20480 a 320 triangulos).
+    // Crea los niveles de detalle (de 20480 a 320 triangulos) y, si hay
+    // shape, los deforma.
     void buildLods(const Material& material);
     // Elige el nivel segun cuantos pixeles de radio ocupa en pantalla.
     int chooseLod(float screenRadius) const;
@@ -40,6 +45,7 @@ struct CelestialBody {
     // Posicion y giro del planeta (sin escala): lo usan los objetos de
     // superficie para girar junto con el.
     Mat4 frameMatrix(float time) const;
+    float spinAngle(float time) const;
     Mat4 modelMatrix(float time) const;
 };
 
@@ -57,6 +63,7 @@ struct Scene {
     std::vector<Mesh> rockModels;
     Mesh treeModel, crystalModel, beaconModel;
     unsigned propSeed = 0;
+    bool deformTerrain = true; // tecla G: ver Duna deformada o como esfera
 
     // Crea el sol, los planetas, las estrellas y los objetos de superficie.
     void build(unsigned propSeed);

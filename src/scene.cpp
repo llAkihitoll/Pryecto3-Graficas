@@ -25,6 +25,10 @@ const int LOD_COUNT = 4;
 void CelestialBody::buildLods(const Material& material) {
     lods.clear();
     for (int i = 0; i < LOD_COUNT; ++i) lods.push_back(makeIcosphere(LOD_SUBDIVISIONS[i], material));
+    if (shape) {
+        sphereLods = lods;
+        for (Mesh& m : lods) displaceSphere(m, shape);
+    }
 }
 
 int CelestialBody::chooseLod(float screenRadius) const {
@@ -50,9 +54,10 @@ Vec3 CelestialBody::velocity(float time) const {
 // Orden de las transformaciones (de derecha a izquierda): escalar la esfera
 // unitaria al radio, girarla sobre su eje, inclinar el eje y llevarla a su
 // lugar en la orbita.
+float CelestialBody::spinAngle(float time) const { return spinPeriod > 0.0f ? 2.0f * PI * time / spinPeriod : 0.0f; }
+
 Mat4 CelestialBody::frameMatrix(float time) const {
-    float spin = spinPeriod > 0.0f ? 2.0f * PI * time / spinPeriod : 0.0f;
-    return translate(position(time)) * rotateZ(axialTilt) * rotateY(spin);
+    return translate(position(time)) * rotateZ(axialTilt) * rotateY(spinAngle(time));
 }
 
 Mat4 CelestialBody::modelMatrix(float time) const { return frameMatrix(time) * scale(radius); }
@@ -62,12 +67,30 @@ static float smoothstep(float a, float b, float x) {
     return t * t * (3.0f - 2.0f * t);
 }
 
+// Ruidos del terreno, con las mismas semillas que el horneado de las
+// texturas, para que la forma y los objetos coincidan con lo que se ve.
+static const Noise& duneTerrain() {
+    static Noise noise(DUNE_SEED);
+    return noise;
+}
+
+// Que tanto se hunden o levantan los vertices de Duna, en radios del planeta
+// (0.09 * radio 10 = hasta ~0.9 unidades).
+const float DUNE_RELIEF = 0.09f;
+
+// Forma deformada de Duna: la misma altura que se uso para la textura y el
+// mapa de normales, ahora tambien moviendo la geometria.
+static float duneShape(const Vec3& dir) {
+    return 1.0f + DUNE_RELIEF * clampf(duneHeight(duneTerrain(), dir), -1.0f, 1.0f);
+}
+
 void Scene::buildProps(unsigned seed) {
     propSeed = seed;
     // El terreno usa las semillas de los planetas (para que coincida con la
     // textura); la distribucion usa la semilla de objetos.
     Noise density(seed);
-    Noise duneTerrain(DUNE_SEED), glaciaTerrain(GLACIA_SEED), vergelTerrain(VERGEL_SEED);
+    const Noise& duneTerrain = ::duneTerrain();
+    Noise glaciaTerrain(GLACIA_SEED), vergelTerrain(VERGEL_SEED);
     std::vector<const Mesh*> rocks;
     for (const Mesh& r : rockModels) rocks.push_back(&r);
 
@@ -108,7 +131,8 @@ void Scene::buildProps(unsigned seed) {
     const float heights[] = {0.0f, 3.6f, 2.0f, 2.7f}; // altura maxima de cada planeta (modelo * escala)
     std::printf("Objetos de superficie (semilla %u):", seed);
     for (int i = 1; i < 4; ++i) {
-        bodies[i].props = mergeProps(*lists[i], bodies[i].radius);
+        // Los objetos se apoyan en la altura real del terreno si esta deformado.
+        bodies[i].props = mergeProps(*lists[i], bodies[i].radius, deformTerrain ? bodies[i].shape : nullptr);
         bodies[i].propCount = (int)lists[i]->size();
         bodies[i].propHeight = heights[i];
         std::printf(" %s %d (%zu triangulos)", bodies[i].name.c_str(), bodies[i].propCount,
@@ -128,6 +152,7 @@ void Scene::build(unsigned seed) {
 
     CelestialBody dune;
     dune.name = "Duna";
+    dune.shape = duneShape;
     dune.buildLods(Material{"Duna", Vec3{0.85f, 0.55f, 0.32f}});
     dune.shader = duneShader;
     dune.radius = 10.0f;
@@ -238,7 +263,8 @@ void Scene::drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const O
         u.model = body.modelMatrix(u.time);
         u.textures = &body.textures;
         u.textureMotion = body.cloudPeriod > 0.0f ? rotateY(2.0f * PI * u.time / body.cloudPeriod) : Mat4::identity();
-        drawMesh(fb, body.lods[body.currentLod], u, body.shader, stats);
+        bool flat = !deformTerrain && !body.sphereLods.empty();
+        drawMesh(fb, (flat ? body.sphereLods : body.lods)[body.currentLod], u, body.shader, stats);
 
         // Objetos de superficie: solo de cerca (LOD 0 o 1). Se dibujan con la
         // matriz del planeta sin escala, asi giran y orbitan junto con el.
