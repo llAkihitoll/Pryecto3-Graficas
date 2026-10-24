@@ -148,6 +148,7 @@ void Scene::build(unsigned seed) {
     sun.shader = sunShader;
     sun.radius = 30.0f;
     sun.spinPeriod = 60.0f;
+    sun.surfaceGravity = 10.0f;
     bodies.push_back(std::move(sun));
 
     CelestialBody dune;
@@ -160,6 +161,7 @@ void Scene::build(unsigned seed) {
     dune.orbitPeriod = 240.0f;
     dune.spinPeriod = 40.0f;
     dune.axialTilt = radians(15.0f);
+    dune.surfaceGravity = 7.0f;
     bodies.push_back(std::move(dune));
 
     // Las fases iniciales estan elegidas para que, desde donde arranca el
@@ -174,6 +176,7 @@ void Scene::build(unsigned seed) {
     glacia.orbitPhase = 0.83f;
     glacia.spinPeriod = 50.0f;
     glacia.axialTilt = radians(-25.0f);
+    glacia.surfaceGravity = 5.0f;
     bodies.push_back(std::move(glacia));
 
     CelestialBody vergel;
@@ -186,6 +189,7 @@ void Scene::build(unsigned seed) {
     vergel.orbitPhase = 0.2f;
     vergel.spinPeriod = 70.0f;
     vergel.axialTilt = radians(10.0f);
+    vergel.surfaceGravity = 9.0f;
     vergel.cloudPeriod = 150.0f;
     bodies.push_back(std::move(vergel));
 

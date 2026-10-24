@@ -27,6 +27,7 @@ struct CelestialBody {
     float spinPeriod = 0.0f;  // segundos para dar una vuelta sobre su eje
     float axialTilt = 0.0f;   // inclinacion del eje de rotacion (radianes)
     float cloudPeriod = 0.0f; // segundos para que las nubes den una vuelta (0 = sin nubes)
+    float surfaceGravity = 0.0f; // atraccion en la superficie (unidades/s^2)
 
     // Objetos sobre la superficie, ya unidos en una sola malla en el espacio
     // local del planeta (sin escala). Solo se dibujan cuando el planeta esta cerca.

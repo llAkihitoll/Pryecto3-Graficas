@@ -58,7 +58,8 @@ bool loadCar(const std::string& path, Mesh& mesh) {
 
 // Convierte una cadena de teclas simuladas ("wa", "wb", ...) en entrada.
 // Solo se usa para pruebas sin ventana: w s a d q e, i/k = flechas arriba/abajo,
-// b = boost, x = freno fuerte. En el guion de vuelo, f cambia el modo superficie.
+// b = boost, x = freno fuerte. En el guion de vuelo, f cambia el modo superficie
+// y v la gravedad.
 ShipInput inputFromString(const std::string& keys) {
     ShipInput in;
     for (char k : keys) {
@@ -95,7 +96,7 @@ std::vector<SphereCollider> collidersAt(const Scene& scene, float time) {
     for (size_t i = 0; i < scene.bodies.size(); ++i) {
         const CelestialBody& b = scene.bodies[i];
         float zone = i == 0 ? 0.0f : 4.0f * b.radius;
-        SphereCollider c{b.position(time), b.velocity(time), b.radius, zone};
+        SphereCollider c{b.position(time), b.velocity(time), b.radius, zone, b.surfaceGravity};
         if (b.shape && scene.deformTerrain) {
             // Giro inverso del planeta (deshace la inclinacion y el giro en orden contrario).
             c.shape = b.shape;
@@ -230,6 +231,7 @@ int main(int argc, char* argv[]) {
     u.projection = perspective(radians(FOV_DEG), (float)RENDER_WIDTH / RENDER_HEIGHT, Z_NEAR, Z_FAR);
 
     Ship ship = makeStartShip(scene, elapsed);
+    ShipInput lastInput; // teclas del ultimo cuadro, para predecir la trayectoria
     if (nearBody > 0 && nearBody < (int)scene.bodies.size()) {
         // Del lado del sol (de dia), a 3 radios del centro y mirando al planeta.
         const CelestialBody& b = scene.bodies[nearBody];
@@ -250,7 +252,9 @@ int main(int argc, char* argv[]) {
         Vec3 prevDir = normalize(ship.position - around.position(elapsed));
         for (const auto& seg : parseFlightScript(flightScript)) {
             ShipInput in = inputFromString(seg.first);
+            lastInput = in;
             if (seg.first.find('f') != std::string::npos) ship.surfaceEnabled = !ship.surfaceEnabled;
+            if (seg.first.find('v') != std::string::npos) ship.gravityEnabled = !ship.gravityEnabled;
             int frames = (int)(seg.second * 60.0f + 0.5f);
             for (int i = 0; i < frames; ++i) {
                 ship.update(in, 1.0f / 60.0f, collidersAt(scene, elapsed));
@@ -302,6 +306,7 @@ int main(int argc, char* argv[]) {
                     case SDLK_l: opt.autoLod = !opt.autoLod; break;
                     case SDLK_o: opt.cullObjects = !opt.cullObjects; break;
                     case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
+                    case SDLK_v: ship.gravityEnabled = !ship.gravityEnabled; break;
                     case SDLK_g: // deformacion de Duna: los objetos se vuelven a apoyar en el suelo
                         scene.deformTerrain = !scene.deformTerrain;
                         scene.buildProps(scene.propSeed);
@@ -323,7 +328,8 @@ int main(int argc, char* argv[]) {
 
         if (!screenshotPath) {
             std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
-            ship.update(readKeyboard(), dt, colliders);
+            lastInput = readKeyboard();
+            ship.update(lastInput, dt, colliders);
             camera.update(ship, dt, looking, mouseDx, mouseDy);
             camera.keepOutside(colliders);
         }
@@ -348,6 +354,20 @@ int main(int argc, char* argv[]) {
             drawMesh(fb, carUsesLod ? carLod : carFull, u, carShader, stats);
         } else {
             stats.objectsCulled++;
+        }
+
+        // Trayectoria prevista: una copia del carro avanza 3 s con las mismas
+        // teclas; cada punto marca donde estara. Con gravedad se ve como la
+        // curvan los planetas y el sol.
+        if (ship.gravityEnabled && !ship.surfaceMode) {
+            Ship ghost = ship;
+            std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
+            for (int i = 1; i <= 30; ++i) {
+                ghost.update(lastInput, 0.1f, colliders);
+                if (ghost.surfaceMode) break;
+                uint32_t g = (uint32_t)(255 - i * 6);
+                drawPoint3D(fb, u, ghost.position, 0xFF000000u | (g / 3 << 16) | (g << 8) | g, i < 10 ? 3 : 2);
+            }
         }
 
         // HUD: velocidad (cian) y boost (naranja) en la esquina inferior izquierda.
@@ -382,12 +402,12 @@ int main(int argc, char* argv[]) {
             std::snprintf(title, sizeof(title),
                           "Proyecto 3 - Galaxia | %.0f FPS | vel %.1f | boost %.0f%% | %s a %.1f%s | "
                           "objetos %d (descartados %d) | superficie %d (semilla %u) | tris %d / raster %d | "
-                          "descarte %s, LOD %s, relieve %s",
+                          "descarte %s, LOD %s, relieve %s, gravedad %s",
                           framesCounted / titleTimer, speed, 100.0f * ship.boostFuel / ship.tuning.boostCapacity,
                           nearName, ship.altitude, ship.surfaceMode ? " (superficie)" : "", stats.objectsDrawn,
                           stats.objectsCulled, stats.propsDrawn, scene.propSeed, stats.trianglesIn,
                           stats.trianglesDrawn, opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no",
-                          scene.deformTerrain ? "si" : "no");
+                          scene.deformTerrain ? "si" : "no", ship.gravityEnabled ? "si" : "no");
             SDL_SetWindowTitle(window, title);
             titleTimer = 0.0f;
             framesCounted = 0;
