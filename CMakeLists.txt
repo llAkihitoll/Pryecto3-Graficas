@@ -52,3 +52,17 @@ add_custom_command(TARGET galaxia POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:galaxia>/assets"
 )
+
+# En Windows con MinGW: las bibliotecas de C++ y de hilos se enlazan dentro
+# del ejecutable y SDL2.dll se copia a su lado, asi se puede abrir con doble
+# clic o desde PowerShell sin tener MSYS2 en el PATH.
+if(MINGW)
+    target_link_options(galaxia PRIVATE -static-libgcc -static-libstdc++
+        -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive,-Bdynamic)
+endif()
+if(WIN32 AND TARGET SDL2::SDL2)
+    add_custom_command(TARGET galaxia POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:SDL2::SDL2>" "$<TARGET_FILE_DIR:galaxia>"
+    )
+endif()
