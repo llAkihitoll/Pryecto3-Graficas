@@ -193,6 +193,15 @@ Vec3 ignisShader(const Fragment& f, const Uniforms& u) {
     return rock + lavaColor * (heat * 1.3f) + smoke;
 }
 
+Vec3 flameShader(const Fragment& f, const Uniforms& u) {
+    float t = clampf(f.localPos.z, 0.0f, 1.0f); // 0 en la tobera, 1 en la punta
+    float flicker = 0.85f + 0.15f * std::sin(u.time * 45.0f + t * 12.0f);
+    Vec3 core{1.0f, 0.95f, 0.8f};
+    Vec3 c = lerp(core, f.material->color, smoothstep(0.0f, 0.45f, t));
+    c = lerp(c, f.material->color * 0.25f, smoothstep(0.6f, 1.0f, t));
+    return c * flicker;
+}
+
 Vec3 propShader(const Fragment& f, const Uniforms& u) {
     const Material& m = *f.material;
     Vec3 toLight = normalize(u.lightPos - f.worldPos);
