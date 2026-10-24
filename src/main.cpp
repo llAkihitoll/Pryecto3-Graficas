@@ -14,7 +14,7 @@
 #include "scene.h"
 #include "shaders.h"
 #include "ship.h"
-#include "spacekit.h"
+#include "boost_flame.h"
 
 // Resolucion interna del framebuffer. La ventana es mas grande y SDL solo
 // estira la imagen ya terminada al mostrarla.
@@ -170,7 +170,6 @@ int main(int argc, char* argv[]) {
     //   --flat                    Duna sin deformar (esfera), para comparar
     //   --hide-help               empieza sin el panel de controles
     //   --no-normal-map           sin mapas de normales en el carro, para comparar
-    //   --no-kit                  el carro sin el kit espacial (como el modelo original)
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f, zoom = 0.0f;
@@ -181,7 +180,6 @@ int main(int argc, char* argv[]) {
     bool flatTerrain = false;
     bool showHelp = true;
     bool noNormalMap = false;
-    bool showKit = true;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
@@ -198,7 +196,6 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--flat") == 0) flatTerrain = true;
         else if (std::strcmp(argv[i], "--hide-help") == 0) showHelp = false;
         else if (std::strcmp(argv[i], "--no-normal-map") == 0) noNormalMap = true;
-        else if (std::strcmp(argv[i], "--no-kit") == 0) showKit = false;
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
 
@@ -228,10 +225,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     const float carRadius = carFull.boundingRadius();
-    // Kit espacial modelado en codigo (propulsores, alerones, aleta) y llamas.
-    const Mesh spaceKit = makeSpaceKit();
-    const Mesh flameBoost = makeFlame({1.0f, 0.45f, 0.08f});
-    const Mesh flameThrust = makeFlame({0.35f, 0.6f, 1.0f});
+    // Llama del boost (sale de los escapes del Fennec).
+    const Mesh boostFlame = makeFlame({1.0f, 0.45f, 0.08f});
     bool carUsesLod = false;
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
@@ -342,7 +337,6 @@ int main(int argc, char* argv[]) {
                     case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
                     case SDLK_v: ship.gravityEnabled = !ship.gravityEnabled; break;
                     case SDLK_m: u.normalMapping = !u.normalMapping; break;
-                    case SDLK_k: showKit = !showKit; break;
                     case SDLK_h:
                         showHelp = !showHelp;
                         helpTouched = true;
@@ -392,19 +386,15 @@ int main(int argc, char* argv[]) {
             carUsesLod = opt.autoLod && projectedRadius(u, ship.position, carRadius, RENDER_HEIGHT) < CAR_LOD_PIXELS;
             u.model = ship.modelMatrix();
             drawMesh(fb, carUsesLod ? carLod : carFull, u, carShader, stats);
-            if (showKit) {
-                // Kit espacial: mismas coordenadas que el carro, misma matriz.
-                drawMesh(fb, spaceKit, u, carShader, stats);
-                // Llamas: largas y naranjas con boost, cortas y azules al acelerar.
-                bool thrusting = lastInput.throttle > 0.0f || ship.boosting;
-                if (thrusting) {
-                    float length = ship.boosting ? 0.9f + 0.3f * std::sin(elapsed * 31.0f) : 0.35f;
-                    const Mesh& flame = ship.boosting ? flameBoost : flameThrust;
-                    for (const Vec3& nozzle : {NOZZLE_LEFT, NOZZLE_RIGHT}) {
-                        u.model = ship.modelMatrix() * translate(nozzle) *
-                                  scale3({NOZZLE_RADIUS, NOZZLE_RADIUS, length});
-                        drawMesh(fb, flame, u, flameShader, stats);
-                    }
+            // Boost como en Rocket League: una llama sale de cada escape del
+            // carro. El cono se coloca en el escape, con la matriz del carro,
+            // y su largo oscila con el tiempo.
+            if (ship.boosting) {
+                float length = 0.75f + 0.2f * std::sin(elapsed * 31.0f);
+                for (const Vec3& exhaust : {EXHAUST_LEFT, EXHAUST_RIGHT}) {
+                    u.model = ship.modelMatrix() * translate(exhaust) *
+                              scale3({EXHAUST_RADIUS, EXHAUST_RADIUS, length});
+                    drawMesh(fb, boostFlame, u, flameShader, stats);
                 }
             }
         } else {

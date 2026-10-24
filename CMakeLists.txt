@@ -20,6 +20,7 @@ find_package(ZLIB REQUIRED)
 
 add_executable(galaxia
     src/main.cpp
+    src/boost_flame.cpp
     src/camera.cpp
     src/font.cpp
     src/framebuffer.cpp
@@ -35,7 +36,6 @@ add_executable(galaxia
     src/scene.cpp
     src/shaders.cpp
     src/ship.cpp
-    src/spacekit.cpp
     src/texture.cpp
 )
 
