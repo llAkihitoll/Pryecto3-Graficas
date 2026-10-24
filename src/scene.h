@@ -21,6 +21,7 @@ struct CelestialBody {
     float orbitPhase = 0.0f;  // angulo inicial en la orbita (radianes)
     float spinPeriod = 0.0f;  // segundos para dar una vuelta sobre su eje
     float axialTilt = 0.0f;   // inclinacion del eje de rotacion (radianes)
+    float cloudPeriod = 0.0f; // segundos para que las nubes den una vuelta (0 = sin nubes)
 
     // Crea los niveles de detalle (de 20480 a 320 triangulos).
     void buildLods(const Material& material);

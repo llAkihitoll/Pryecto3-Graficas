@@ -1,6 +1,7 @@
 #include "scene.h"
 #include <algorithm>
 #include <random>
+#include <thread>
 #include <utility>
 #include "geometry.h"
 #include "shaders.h"
@@ -9,6 +10,8 @@
 const unsigned STAR_SEED = 2026;
 const unsigned SUN_SEED = 7;
 const unsigned DUNE_SEED = 42;
+const unsigned GLACIA_SEED = 1337;
+const unsigned VERGEL_SEED = 99;
 const int STAR_COUNT = 1800;
 
 // Subdivisiones de cada nivel de detalle y desde cuantos pixeles de radio
@@ -58,7 +61,6 @@ void Scene::build() {
     sun.shader = sunShader;
     sun.radius = 30.0f;
     sun.spinPeriod = 60.0f;
-    bakeSun(sun.textures, SUN_SEED, 256);
     bodies.push_back(std::move(sun));
 
     CelestialBody dune;
@@ -70,8 +72,44 @@ void Scene::build() {
     dune.orbitPeriod = 240.0f;
     dune.spinPeriod = 40.0f;
     dune.axialTilt = radians(15.0f);
-    bakeDune(dune.textures, DUNE_SEED, 512);
     bodies.push_back(std::move(dune));
+
+    // Las fases iniciales estan elegidas para que, desde donde arranca el
+    // carro, Glacia y Vergel se vean a los lados de Duna.
+    CelestialBody glacia;
+    glacia.name = "Glacia";
+    glacia.buildLods(Material{"Glacia", Vec3{0.8f, 0.9f, 1.0f}});
+    glacia.shader = glaciaShader;
+    glacia.radius = 8.0f;
+    glacia.orbitRadius = 230.0f;
+    glacia.orbitPeriod = 360.0f;
+    glacia.orbitPhase = 0.83f;
+    glacia.spinPeriod = 50.0f;
+    glacia.axialTilt = radians(-25.0f);
+    bodies.push_back(std::move(glacia));
+
+    CelestialBody vergel;
+    vergel.name = "Vergel";
+    vergel.buildLods(Material{"Vergel", Vec3{0.3f, 0.6f, 0.3f}});
+    vergel.shader = vergelShader;
+    vergel.radius = 13.0f;
+    vergel.orbitRadius = 330.0f;
+    vergel.orbitPeriod = 480.0f;
+    vergel.orbitPhase = 0.2f;
+    vergel.spinPeriod = 70.0f;
+    vergel.axialTilt = radians(10.0f);
+    vergel.cloudPeriod = 150.0f;
+    bodies.push_back(std::move(vergel));
+
+    // Hornear las superficies de todos los cuerpos al mismo tiempo (cada
+    // horneado ademas reparte sus 6 caras en hilos). Los cuerpos ya estan
+    // todos en el vector, asi que no se mueven de memoria mientras tanto.
+    std::vector<std::thread> bakers;
+    bakers.emplace_back([this]() { bakeSun(bodies[0].textures, SUN_SEED, 256); });
+    bakers.emplace_back([this]() { bakeDune(bodies[1].textures, DUNE_SEED, 512); });
+    bakers.emplace_back([this]() { bakeGlacia(bodies[2].textures, GLACIA_SEED, 512); });
+    bakers.emplace_back([this]() { bakeVergel(bodies[3].textures, VERGEL_SEED, 512); });
+    for (std::thread& t : bakers) t.join();
 
     // Direcciones uniformes sobre la esfera: z uniforme en [-1, 1] y un
     // angulo uniforme alrededor. La semilla fija da siempre el mismo cielo.
@@ -130,6 +168,7 @@ void Scene::drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const O
 
         u.model = body.modelMatrix(u.time);
         u.textures = &body.textures;
+        u.textureMotion = body.cloudPeriod > 0.0f ? rotateY(2.0f * PI * u.time / body.cloudPeriod) : Mat4::identity();
         drawMesh(fb, body.lods[body.currentLod], u, body.shader, stats);
     }
     u.textures = nullptr;
