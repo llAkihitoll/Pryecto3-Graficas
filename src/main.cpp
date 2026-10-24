@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
+#include <vector>
 #include "camera.h"
 #include "framebuffer.h"
 #include "hud.h"
@@ -52,7 +54,7 @@ bool loadCar(const std::string& path, Mesh& mesh) {
 
 // Convierte una cadena de teclas simuladas ("wa", "wb", ...) en entrada.
 // Solo se usa para pruebas sin ventana: w s a d q e, i/k = flechas arriba/abajo,
-// b = boost, x = freno fuerte.
+// b = boost, x = freno fuerte. En el guion de vuelo, f cambia el modo superficie.
 ShipInput inputFromString(const std::string& keys) {
     ShipInput in;
     for (char k : keys) {
@@ -82,6 +84,35 @@ ShipInput readKeyboard() {
     return in;
 }
 
+// Esferas de colision de todos los cuerpos en este instante. Los planetas
+// tienen una zona de acercamiento de 4 radios; el sol solo colisiona.
+std::vector<SphereCollider> collidersAt(const Scene& scene, float time) {
+    std::vector<SphereCollider> colliders;
+    for (size_t i = 0; i < scene.bodies.size(); ++i) {
+        const CelestialBody& b = scene.bodies[i];
+        float zone = i == 0 ? 0.0f : 4.0f * b.radius;
+        colliders.push_back(SphereCollider{b.position(time), b.velocity(time), b.radius, zone});
+    }
+    return colliders;
+}
+
+// Guion de vuelo para pruebas: "w:3,wa:2.5,x:1" = W por 3 s, W+A por 2.5 s...
+std::vector<std::pair<std::string, float>> parseFlightScript(const std::string& script) {
+    std::vector<std::pair<std::string, float>> segments;
+    size_t start = 0;
+    while (start < script.size()) {
+        size_t end = script.find(',', start);
+        if (end == std::string::npos) end = script.size();
+        std::string seg = script.substr(start, end - start);
+        size_t colon = seg.find(':');
+        if (colon != std::string::npos) {
+            segments.push_back({seg.substr(0, colon), (float)std::atof(seg.c_str() + colon + 1)});
+        }
+        start = end + 1;
+    }
+    return segments;
+}
+
 Ship makeStartShip(const Scene& scene, float time) {
     Ship ship;
     ship.position = CAR_START;
@@ -93,6 +124,7 @@ Ship makeStartShip(const Scene& scene, float time) {
 // frenar) simulado a distintos FPS debe terminar en el mismo lugar. Se cuentan
 // cuadros enteros para que el cambio de teclas caiga en el mismo instante.
 void runDtTest(const Scene& scene) {
+    std::vector<SphereCollider> colliders = collidersAt(scene, 0.0f);
     const int fpsList[] = {20, 30, 60, 144, 240};
     for (int fps : fpsList) {
         Ship ship = makeStartShip(scene, 0.0f);
@@ -100,7 +132,7 @@ void runDtTest(const Scene& scene) {
         for (int i = 0; i < 6 * fps; ++i) {
             float t = (float)i / fps;
             const char* keys = t < 2.0f ? "w" : (t < 3.5f ? "wa" : (t < 5.0f ? "wbi" : "x"));
-            ship.update(inputFromString(keys), frame);
+            ship.update(inputFromString(keys), frame, colliders);
         }
         std::printf("%3d FPS -> posicion (%.3f, %.3f, %.3f)  velocidad %.3f\n", fps,
                     ship.position.x, ship.position.y, ship.position.z, length(ship.velocity));
@@ -111,19 +143,18 @@ int main(int argc, char* argv[]) {
     // Opciones para pruebas:
     //   --screenshot archivo.png  guarda un cuadro y termina
     //   --time s                  adelanta la simulacion de los planetas
-    //   --fly s --keys "wb"       antes de la captura, vuela s segundos con esas teclas
+    //   --fly "w:3,wa:2"          antes de la captura, vuela con ese guion de teclas
     //   --look yaw pitch          vista libre de la camara (grados)
     //   --lod                     usa el modelo reducido del carro
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
-    float elapsed = 0.0f, flySeconds = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
-    std::string flyKeys;
+    float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
+    std::string flightScript;
     bool useLod = false, dtTest = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
         else if (std::strcmp(argv[i], "--time") == 0 && i + 1 < argc) elapsed = (float)std::atof(argv[++i]);
-        else if (std::strcmp(argv[i], "--fly") == 0 && i + 1 < argc) flySeconds = (float)std::atof(argv[++i]);
-        else if (std::strcmp(argv[i], "--keys") == 0 && i + 1 < argc) flyKeys = argv[++i];
+        else if (std::strcmp(argv[i], "--fly") == 0 && i + 1 < argc) flightScript = argv[++i];
         else if (std::strcmp(argv[i], "--look") == 0 && i + 2 < argc) {
             lookYawDeg = (float)std::atof(argv[++i]);
             lookPitchDeg = (float)std::atof(argv[++i]);
@@ -172,18 +203,33 @@ int main(int argc, char* argv[]) {
     ChaseCamera camera;
     camera.snapTo(ship);
 
-    // Modo de prueba: simula el vuelo con pasos de 1/60 s antes de la captura.
-    if (screenshotPath && flySeconds > 0.0f) {
-        ShipInput in = inputFromString(flyKeys);
-        for (float t = 0.0f; t < flySeconds; t += 1.0f / 60.0f) {
-            ship.update(in, 1.0f / 60.0f);
-            camera.update(ship, 1.0f / 60.0f, false, 0, 0);
-            elapsed += 1.0f / 60.0f;
+    // Modo de prueba: simula el guion de vuelo a 60 FPS antes de la captura
+    // e imprime la altitud al final de cada tramo, y cuantos grados ha
+    // recorrido el carro alrededor del planeta (360 = una vuelta completa).
+    if (screenshotPath) {
+        float degreesAround = 0.0f;
+        Vec3 prevDir = normalize(ship.position - scene.bodies[1].position(elapsed));
+        for (const auto& seg : parseFlightScript(flightScript)) {
+            ShipInput in = inputFromString(seg.first);
+            if (seg.first.find('f') != std::string::npos) ship.surfaceEnabled = !ship.surfaceEnabled;
+            int frames = (int)(seg.second * 60.0f + 0.5f);
+            for (int i = 0; i < frames; ++i) {
+                ship.update(in, 1.0f / 60.0f, collidersAt(scene, elapsed));
+                camera.update(ship, 1.0f / 60.0f, false, 0, 0);
+                elapsed += 1.0f / 60.0f;
+                Vec3 dir = normalize(ship.position - scene.bodies[1].position(elapsed));
+                degreesAround += std::acos(clampf(dot(prevDir, dir), -1.0f, 1.0f)) * 180.0f / PI;
+                prevDir = dir;
+            }
+            std::printf("  tramo %-4s %.1f s -> altitud %.2f sobre %s, velocidad %.1f, %s, %.0f grados alrededor\n",
+                        seg.first.c_str(), seg.second, ship.altitude, scene.bodies[ship.nearest].name.c_str(),
+                        length(ship.velocity), ship.surfaceMode ? "superficie" : "libre", degreesAround);
         }
+        camera.lookYaw = radians(lookYawDeg);
+        camera.lookPitch = radians(lookPitchDeg);
+        camera.snapTo(ship);
+        camera.keepOutside(collidersAt(scene, elapsed));
     }
-    camera.lookYaw = radians(lookYawDeg);
-    camera.lookPitch = radians(lookPitchDeg);
-    if (screenshotPath) camera.snapTo(ship);
 
     RenderStats stats;
 
@@ -215,10 +261,12 @@ int main(int argc, char* argv[]) {
                 switch (event.key.keysym.sym) {
                     case SDLK_ESCAPE: running = false; break;
                     case SDLK_l: useLod = !useLod; break;
+                    case SDLK_f: ship.surfaceEnabled = !ship.surfaceEnabled; break;
                     case SDLK_b: u.cullBackFaces = !u.cullBackFaces; break;
                     case SDLK_r:
                         ship = makeStartShip(scene, elapsed);
                         camera.snapTo(ship);
+                        camera.keepOutside(collidersAt(scene, elapsed));
                         break;
                     case SDLK_p:
                         if (fb.savePNG("captura.png")) std::printf("Captura guardada en captura.png\n");
@@ -229,8 +277,10 @@ int main(int argc, char* argv[]) {
         bool looking = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
 
         if (!screenshotPath) {
-            ship.update(readKeyboard(), dt);
+            std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
+            ship.update(readKeyboard(), dt, colliders);
             camera.update(ship, dt, looking, mouseDx, mouseDy);
+            camera.keepOutside(colliders);
         }
 
         u.cameraPos = camera.eye;
@@ -251,6 +301,9 @@ int main(int argc, char* argv[]) {
         drawBar(fb, 16, RENDER_HEIGHT - 34, 160, 8, speed / ship.tuning.maxBoostSpeed, 0xFF3CC8FF);
         drawBar(fb, 16, RENDER_HEIGHT - 20, 160, 8, ship.boostFuel / ship.tuning.boostCapacity,
                 ship.boosting ? 0xFFFFE070 : 0xFFFF8A20);
+        // Indicador del modo superficie: verde activo, gris apagado con F.
+        uint32_t modeColor = ship.surfaceMode ? 0xFF50E070 : (ship.surfaceEnabled ? 0xFF303848 : 0xFF803030);
+        fillRect(fb, 184, RENDER_HEIGHT - 34, 22, 22, modeColor);
         double frameMs = 1000.0 * (SDL_GetPerformanceCounter() - frameStart) / SDL_GetPerformanceFrequency();
 
         if (screenshotPath) {
@@ -265,10 +318,12 @@ int main(int argc, char* argv[]) {
         framesCounted++;
         titleTimer += dt;
         if (titleTimer >= 0.5f) {
-            char title[200];
+            char title[256];
+            const char* nearName = ship.nearest >= 0 ? scene.bodies[ship.nearest].name.c_str() : "-";
             std::snprintf(title, sizeof(title),
-                          "Proyecto 3 - Galaxia | %.0f FPS | velocidad %.1f | boost %.0f%% | tris %d / raster %d",
+                          "Proyecto 3 - Galaxia | %.0f FPS | velocidad %.1f | boost %.0f%% | %s a %.1f%s | tris %d / raster %d",
                           framesCounted / titleTimer, speed, 100.0f * ship.boostFuel / ship.tuning.boostCapacity,
+                          nearName, ship.altitude, ship.surfaceMode ? " (superficie)" : "",
                           stats.trianglesIn, stats.trianglesDrawn);
             SDL_SetWindowTitle(window, title);
             titleTimer = 0.0f;
