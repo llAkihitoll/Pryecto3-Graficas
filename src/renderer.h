@@ -19,6 +19,7 @@ struct Uniforms {
     Mat4 textureMotion = Mat4::identity();
     Vec3 objectCenter; // centro del planeta sobre el que estan los objetos de superficie
     float objectRadius = 0.0f; // radio de ese planeta (para la sombra sobre los anillos)
+    bool normalMapping = true; // tecla M: usar los mapas de normales del carro
 };
 
 // Lo que recibe el shader de fragmentos por cada pixel cubierto. worldPos,
@@ -29,6 +30,8 @@ struct Fragment {
     Vec3 worldPos;
     Vec3 localPos;
     Vec3 normal;
+    Vec3 uvw;     // (u, v, signo de la tangente), solo con mapa de normales
+    Vec3 tangent; // tangente interpolada (sin normalizar), solo con mapa de normales
     const Material* material;
     int x, y;
 };

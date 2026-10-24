@@ -4,18 +4,22 @@
 #include "parallel.h"
 
 // Vertice ya transformado: posicion en espacio de recorte mas los datos
-// que se van a interpolar (posicion en el mundo y en el modelo, y normal).
+// que se van a interpolar (posicion en el mundo y en el modelo, normal, y
+// para el mapeo de normales: (u, v, signo de la tangente) y la tangente).
 struct ClipVertex {
     Vec4 clip;
     Vec3 world;
     Vec3 local;
     Vec3 normal;
+    Vec3 uvw;
+    Vec3 tangent;
 };
 
 static ClipVertex lerpVertex(const ClipVertex& a, const ClipVertex& b, float t) {
     return ClipVertex{Vec4(a.clip.x + (b.clip.x - a.clip.x) * t, a.clip.y + (b.clip.y - a.clip.y) * t,
                            a.clip.z + (b.clip.z - a.clip.z) * t, a.clip.w + (b.clip.w - a.clip.w) * t),
-                      lerp(a.world, b.world, t), lerp(a.local, b.local, t), lerp(a.normal, b.normal, t)};
+                      lerp(a.world, b.world, t), lerp(a.local, b.local, t), lerp(a.normal, b.normal, t),
+                      lerp(a.uvw, b.uvw, t), lerp(a.tangent, b.tangent, t)};
 }
 
 static uint32_t toARGB(const Vec3& c) {
@@ -44,7 +48,7 @@ static ScreenVertex toScreen(const Vec4& c, int width, int height) {
 struct SetupTriangle {
     ScreenVertex s[3];
     float A[3], B[3], C[3]; // funciones de arista normalizadas (dan las baricentricas)
-    Vec3 world[3], local[3], normal[3];
+    Vec3 world[3], local[3], normal[3], uvw[3], tangent[3];
     const Material* material;
     int minX, maxX, minY, maxY;
 };
@@ -90,6 +94,8 @@ static bool setupTriangle(const ClipVertex& v0, const ClipVertex& v1, const Clip
         t.world[i] = v[i]->world * s[i]->invW;
         t.local[i] = v[i]->local * s[i]->invW;
         t.normal[i] = v[i]->normal * s[i]->invW;
+        t.uvw[i] = v[i]->uvw * s[i]->invW;
+        t.tangent[i] = v[i]->tangent * s[i]->invW;
     }
     t.material = material;
     return true;
@@ -102,6 +108,8 @@ static long long rasterRows(Framebuffer& fb, const SetupTriangle& t, int y0, int
     long long shaded = 0;
     Fragment frag;
     frag.material = t.material;
+    // UV y tangente solo hacen falta si el material tiene mapa de normales.
+    const bool mapped = (bool)t.material->normalMap;
 
     for (int y = std::max(y0, t.minY); y <= std::min(y1, t.maxY); ++y) {
         float py = y + 0.5f;
@@ -123,6 +131,10 @@ static long long rasterRows(Framebuffer& fb, const SetupTriangle& t, int y0, int
             frag.worldPos = (t.world[0] * l0 + t.world[1] * l1 + t.world[2] * l2) * w;
             frag.localPos = (t.local[0] * l0 + t.local[1] * l1 + t.local[2] * l2) * w;
             frag.normal = normalize((t.normal[0] * l0 + t.normal[1] * l1 + t.normal[2] * l2) * w);
+            if (mapped) {
+                frag.uvw = (t.uvw[0] * l0 + t.uvw[1] * l1 + t.uvw[2] * l2) * w;
+                frag.tangent = (t.tangent[0] * l0 + t.tangent[1] * l1 + t.tangent[2] * l2) * w;
+            }
             frag.x = x;
             frag.y = y;
             fb.setPixel(x, y, toARGB(shader(frag, u)));
@@ -241,6 +253,8 @@ void drawMesh(Framebuffer& fb, const Mesh& mesh, const Uniforms& u, FragmentShad
             transformed[i].local = v.position;
             // Solo usamos escalas uniformes, asi que basta con rotar la normal.
             transformed[i].normal = normalize(u.model.transformDir(v.normal));
+            transformed[i].uvw = Vec3{v.uv.x, v.uv.y, v.tangentSign};
+            transformed[i].tangent = u.model.transformDir(v.tangent);
         }
     });
 
