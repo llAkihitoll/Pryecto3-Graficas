@@ -142,6 +142,15 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `P` | Guardar una captura en `captura.png` |
 | `Esc` | Salir |
 
+### La cámara
+
+- **En vuelo libre** funciona como la cámara de carro de *Rocket League*: sigue al carro pero no su
+  orientación. Se queda nivelada con el horizonte (no rueda) y se coloca detrás del **rumbo
+  horizontal** del carro, así el carro puede inclinarse, rodar o dar volteretas delante de la cámara
+  sin que la pantalla gire ([camera.cpp](src/camera.cpp)).
+- **En modo superficie** se alinea con el carro y la vertical del planeta, sube y mira por debajo
+  del carro para que se vea la superficie. Entre los dos modos la transición es suave.
+
 ### Cómo leer el HUD
 
 - **Arriba a la izquierda:** cuerpo más cercano y altitud, modo (vuelo libre o **modo superficie**

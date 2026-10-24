@@ -4,11 +4,18 @@
 // Camara que sigue al carro desde atras y un poco arriba. No es la camara
 // de raylib: solo calcula el ojo, el objetivo y el "arriba" para armar la
 // matriz de vista con lookAt().
+//
+// En vuelo libre funciona como la camara de carro de Rocket League: sigue al
+// carro pero no su orientacion. Se queda nivelada con el horizonte (no rueda)
+// y se coloca detras del rumbo horizontal del carro, asi el carro puede
+// inclinarse, rodar o dar volteretas delante de la camara sin que la pantalla
+// gire. En modo superficie se alinea con el carro y la vertical del planeta.
 struct ChaseCamera {
     float distance = 5.0f;     // detras del carro (rueda del raton: 2 a 12)
     float height = 1.4f;       // arriba del carro
     float speedZoom = 0.05f;   // distancia extra por unidad de velocidad
     float followRate = 7.0f;   // que tan rapido alcanza la posicion deseada
+    float headingRate = 6.0f;  // que tan rapido gira detras del rumbo del carro
     float lookSensitivity = 0.005f; // radianes por pixel del raton
 
     // En modo superficie la camara sube y mira por debajo del carro: en un
@@ -35,6 +42,10 @@ struct ChaseCamera {
     Mat4 view() const { return lookAt(eye, target, up); }
 
 private:
-    Vec3 offset; // posicion del ojo relativa al carro (suavizada)
+    Vec3 offset;            // posicion del ojo relativa al carro (suavizada)
+    float headingYaw = 0.0f; // rumbo horizontal que sigue la camara en vuelo libre (radianes)
+
+    void updateHeading(const Ship& ship, float k);
     Vec3 desiredOffset(const Ship& ship) const;
+    Vec3 lookTarget(const Ship& ship) const;
 };
