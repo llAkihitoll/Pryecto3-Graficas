@@ -88,7 +88,8 @@ void drawHud(Framebuffer& fb, const HudInfo& info) {
             "F  MODO SUPERFICIE   V  GRAVEDAD",
             "G  RELIEVE   N  NUEVA SEMILLA   M  NORMALES",
             "O  DESCARTE  L  LOD  B  CARAS TRASERAS",
-            "R  REINICIAR  P  CAPTURA  ESC  SALIR",
+            "K  KIT ESPACIAL   R  REINICIAR",
+            "P  CAPTURA   ESC  SALIR",
         };
         const int lines = (int)(sizeof(help) / sizeof(help[0]));
         const int hx = 8, hy = 76, hw = 292, hh = lines * 11 + 10;
