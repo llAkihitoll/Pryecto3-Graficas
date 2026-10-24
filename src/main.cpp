@@ -1,4 +1,5 @@
 #include <SDL.h>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -163,8 +164,12 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
 
+    // Construir la escena incluye hornear las superficies del sol y Duna.
+    auto buildStart = std::chrono::steady_clock::now();
     Scene scene;
     scene.build();
+    std::printf("Escena lista (texturas horneadas) en %.0f ms\n",
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - buildStart).count());
     if (dtTest) {
         runDtTest(scene);
         return 0;

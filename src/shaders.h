@@ -8,10 +8,12 @@
 // para que la silueta del carro se distinga contra el espacio oscuro.
 Vec3 carShader(const Fragment& f, const Uniforms& u);
 
-// Sol: no lo ilumina nadie, brilla solo. Mas claro al centro del disco y
-// anaranjado en el borde (oscurecimiento del limbo).
+// Sol (shader animado): granulos de plasma que se encienden y apagan con el
+// tiempo, cada zona con su propio ritmo, manchas oscuras, borde mas oscuro
+// (limbo) y una paleta de rojo a blanco segun la "temperatura".
 Vec3 sunShader(const Fragment& f, const Uniforms& u);
 
-// Planeta: difuso iluminado por el sol con una luz ambiente muy baja, asi
-// se ve claramente el lado de dia y el de noche.
-Vec3 planetShader(const Fragment& f, const Uniforms& u);
+// Duna: lee el color y la normal con relieve de su cubemap (giran con el
+// planeta), ilumina con el sol, suaviza la linea dia/noche, agrega una luz
+// de relleno azulada en el lado de noche y una bruma de atmosfera en el borde.
+Vec3 duneShader(const Fragment& f, const Uniforms& u);
