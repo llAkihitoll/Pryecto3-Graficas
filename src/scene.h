@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include "planets.h"
+#include "props.h"
 #include "renderer.h"
 
 // Un sol o un planeta. Su posicion y rotacion se calculan directamente a
@@ -23,6 +24,12 @@ struct CelestialBody {
     float axialTilt = 0.0f;   // inclinacion del eje de rotacion (radianes)
     float cloudPeriod = 0.0f; // segundos para que las nubes den una vuelta (0 = sin nubes)
 
+    // Objetos sobre la superficie, ya unidos en una sola malla en el espacio
+    // local del planeta (sin escala). Solo se dibujan cuando el planeta esta cerca.
+    Mesh props;
+    int propCount = 0;
+    float propHeight = 0.0f; // lo mas alto que sobresalen, para el descarte
+
     // Crea los niveles de detalle (de 20480 a 320 triangulos).
     void buildLods(const Material& material);
     // Elige el nivel segun cuantos pixeles de radio ocupa en pantalla.
@@ -30,6 +37,9 @@ struct CelestialBody {
 
     Vec3 position(float time) const;
     Vec3 velocity(float time) const; // derivada de position(): para la colision
+    // Posicion y giro del planeta (sin escala): lo usan los objetos de
+    // superficie para girar junto con el.
+    Mat4 frameMatrix(float time) const;
     Mat4 modelMatrix(float time) const;
 };
 
@@ -43,8 +53,16 @@ struct Scene {
     std::vector<CelestialBody> bodies;
     std::vector<Star> stars;
 
-    // Crea el sol, los planetas y las estrellas (con semilla fija).
-    void build();
+    // Modelos de superficie (se construyen una vez y se copian en cada planeta).
+    std::vector<Mesh> rockModels;
+    Mesh treeModel, crystalModel, beaconModel;
+    unsigned propSeed = 0;
+
+    // Crea el sol, los planetas, las estrellas y los objetos de superficie.
+    void build(unsigned propSeed);
+
+    // Vuelve a repartir los objetos de superficie con otra semilla (tecla N).
+    void buildProps(unsigned seed);
 
     // El sol es el primer cuerpo y tambien la fuente de luz.
     Vec3 sunPosition(float time) const { return bodies[0].position(time); }

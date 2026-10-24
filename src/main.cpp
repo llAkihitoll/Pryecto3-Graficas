@@ -151,12 +151,14 @@ int main(int argc, char* argv[]) {
     //   --look yaw pitch          vista libre de la camara (grados)
     //   --no-opt                  sin descarte de objetos ni LOD (para comparar)
     //   --near N                  empieza frente al lado de dia del cuerpo N (1 = Duna, 2 = Glacia...)
+    //   --seed N                  semilla para repartir los objetos de superficie
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
     std::string flightScript;
     bool dtTest = false;
     int nearBody = -1;
+    unsigned propSeed = 2026;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
@@ -168,13 +170,14 @@ int main(int argc, char* argv[]) {
         }
         else if (std::strcmp(argv[i], "--no-opt") == 0) opt.cullObjects = opt.autoLod = false;
         else if (std::strcmp(argv[i], "--near") == 0 && i + 1 < argc) nearBody = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--seed") == 0 && i + 1 < argc) propSeed = (unsigned)std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
 
     // Construir la escena incluye hornear las superficies del sol y Duna.
     auto buildStart = std::chrono::steady_clock::now();
     Scene scene;
-    scene.build();
+    scene.build(propSeed);
     std::printf("Escena lista (texturas horneadas) en %.0f ms\n",
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - buildStart).count());
     if (dtTest) {
@@ -285,6 +288,7 @@ int main(int argc, char* argv[]) {
                     case SDLK_ESCAPE: running = false; break;
                     case SDLK_l: opt.autoLod = !opt.autoLod; break;
                     case SDLK_o: opt.cullObjects = !opt.cullObjects; break;
+                    case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
                     case SDLK_f: ship.surfaceEnabled = !ship.surfaceEnabled; break;
                     case SDLK_b: u.cullBackFaces = !u.cullBackFaces; break;
                     case SDLK_r:
@@ -341,10 +345,12 @@ int main(int argc, char* argv[]) {
 
         if (screenshotPath) {
             fb.savePNG(screenshotPath);
-            std::printf("%s: render %.1f ms | objetos %d dibujados, %d descartados | triangulos enviados %d, "
-                        "rasterizados %d | LOD (-1 = descartado) Sol %d, Duna %d, carro %s\n",
-                        screenshotPath, frameMs, stats.objectsDrawn, stats.objectsCulled, stats.trianglesIn,
-                        stats.trianglesDrawn, scene.bodies[0].currentLod, scene.bodies[1].currentLod,
+            std::printf("%s: render %.1f ms | objetos %d dibujados, %d descartados | objetos de superficie %d | "
+                        "triangulos enviados %d, rasterizados %d | LOD (-1 = descartado) Sol %d, Duna %d, "
+                        "Glacia %d, Vergel %d, carro %s\n",
+                        screenshotPath, frameMs, stats.objectsDrawn, stats.objectsCulled, stats.propsDrawn,
+                        stats.trianglesIn, stats.trianglesDrawn, scene.bodies[0].currentLod,
+                        scene.bodies[1].currentLod, scene.bodies[2].currentLod, scene.bodies[3].currentLod,
                         carUsesLod ? "reducido" : "completo");
             running = false;
         }
@@ -358,11 +364,12 @@ int main(int argc, char* argv[]) {
             const char* nearName = ship.nearest >= 0 ? scene.bodies[ship.nearest].name.c_str() : "-";
             std::snprintf(title, sizeof(title),
                           "Proyecto 3 - Galaxia | %.0f FPS | vel %.1f | boost %.0f%% | %s a %.1f%s | "
-                          "objetos %d (descartados %d) | tris %d / raster %d | descarte %s, LOD %s",
+                          "objetos %d (descartados %d) | superficie %d (semilla %u) | tris %d / raster %d | "
+                          "descarte %s, LOD %s",
                           framesCounted / titleTimer, speed, 100.0f * ship.boostFuel / ship.tuning.boostCapacity,
                           nearName, ship.altitude, ship.surfaceMode ? " (superficie)" : "", stats.objectsDrawn,
-                          stats.objectsCulled, stats.trianglesIn, stats.trianglesDrawn,
-                          opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no");
+                          stats.objectsCulled, stats.propsDrawn, scene.propSeed, stats.trianglesIn,
+                          stats.trianglesDrawn, opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no");
             SDL_SetWindowTitle(window, title);
             titleTimer = 0.0f;
             framesCounted = 0;

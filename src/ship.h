@@ -46,7 +46,7 @@ struct ShipTuning {
     float approachDeceleration = 60.0f; // lo mismo, dentro de la zona de un planeta
 
     // Modo de vuelo de superficie
-    float cruiseAltitude = 4.0f;   // altitud a la que baja solo al entrar a la zona
+    float cruiseAltitude = 5.0f;   // altitud a la que baja solo al entrar a la zona (sobre arboles y balizas)
     float minAltitude = 1.5f;      // lo mas bajo que se puede fijar con la flecha abajo
     float climbSpeed = 10.0f;      // unidades/s al subir o bajar con las flechas (a ras del suelo)
     float climbPerAltitude = 0.6f; // mas alto sube mas rapido, para salir de la zona sin tardar

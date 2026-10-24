@@ -1,5 +1,6 @@
 #include "scene.h"
 #include <algorithm>
+#include <cstdio>
 #include <random>
 #include <thread>
 #include <utility>
@@ -49,12 +50,74 @@ Vec3 CelestialBody::velocity(float time) const {
 // Orden de las transformaciones (de derecha a izquierda): escalar la esfera
 // unitaria al radio, girarla sobre su eje, inclinar el eje y llevarla a su
 // lugar en la orbita.
-Mat4 CelestialBody::modelMatrix(float time) const {
+Mat4 CelestialBody::frameMatrix(float time) const {
     float spin = spinPeriod > 0.0f ? 2.0f * PI * time / spinPeriod : 0.0f;
-    return translate(position(time)) * rotateZ(axialTilt) * rotateY(spin) * scale(radius);
+    return translate(position(time)) * rotateZ(axialTilt) * rotateY(spin);
 }
 
-void Scene::build() {
+Mat4 CelestialBody::modelMatrix(float time) const { return frameMatrix(time) * scale(radius); }
+
+static float smoothstep(float a, float b, float x) {
+    float t = clampf((x - a) / (b - a), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+void Scene::buildProps(unsigned seed) {
+    propSeed = seed;
+    // El terreno usa las semillas de los planetas (para que coincida con la
+    // textura); la distribucion usa la semilla de objetos.
+    Noise density(seed);
+    Noise duneTerrain(DUNE_SEED), glaciaTerrain(GLACIA_SEED), vergelTerrain(VERGEL_SEED);
+    std::vector<const Mesh*> rocks;
+    for (const Mesh& r : rockModels) rocks.push_back(&r);
+
+    // Duna: balizas en las tierras altas y rocas fuera de los campos de dunas
+    // y del fondo de los crateres grandes.
+    std::vector<PropInstance> dune;
+    scatterProps(ScatterRule{{&beaconModel}, 300, 0.55f, 0.5f, 0.6f, 0.8f,
+                             [&](const Vec3& p) { return smoothstep(0.08f, 0.25f, duneBaseRelief(duneTerrain, p)); }},
+                 seed + 1, density, dune);
+    scatterProps(ScatterRule{rocks, 400, 0.45f, 0.1f, 0.3f, 0.85f,
+                             [&](const Vec3& p) {
+                                 if (duneCrater(duneTerrain, p) < -0.3f) return 0.0f;
+                                 return smoothstep(-0.2f, 0.0f, duneBaseRelief(duneTerrain, p));
+                             }},
+                 seed + 2, density, dune);
+
+    // Glacia: grupos de cristales que brotan sobre las grietas.
+    std::vector<PropInstance> glacia;
+    scatterProps(ScatterRule{{&crystalModel}, 1500, 0.4f, 0.1f, 0.35f, 0.8f,
+                             [&](const Vec3& p) { return glaciaCrack(glaciaTerrain, p); }},
+                 seed + 3, density, glacia);
+
+    // Vergel: arboles en tierra firme (no en el mar ni en las montanas) y
+    // rocas en las montanas.
+    std::vector<PropInstance> vergel;
+    scatterProps(ScatterRule{{&treeModel}, 1500, 0.42f, 0.055f, 0.4f, 0.75f,
+                             [&](const Vec3& p) {
+                                 float e = vergelElevation(vergelTerrain, p);
+                                 return smoothstep(VERGEL_SEA_LEVEL + 0.03f, VERGEL_SEA_LEVEL + 0.06f, e) *
+                                        (1.0f - smoothstep(0.2f, 0.26f, e));
+                             }},
+                 seed + 4, density, vergel);
+    scatterProps(ScatterRule{rocks, 400, 0.4f, 0.07f, 0.4f, 1.0f,
+                             [&](const Vec3& p) { return smoothstep(0.22f, 0.3f, vergelElevation(vergelTerrain, p)); }},
+                 seed + 5, density, vergel);
+
+    const std::vector<PropInstance>* lists[] = {nullptr, &dune, &glacia, &vergel};
+    const float heights[] = {0.0f, 3.6f, 2.0f, 2.7f}; // altura maxima de cada planeta (modelo * escala)
+    std::printf("Objetos de superficie (semilla %u):", seed);
+    for (int i = 1; i < 4; ++i) {
+        bodies[i].props = mergeProps(*lists[i], bodies[i].radius);
+        bodies[i].propCount = (int)lists[i]->size();
+        bodies[i].propHeight = heights[i];
+        std::printf(" %s %d (%zu triangulos)", bodies[i].name.c_str(), bodies[i].propCount,
+                    bodies[i].props.triangles.size());
+    }
+    std::printf("\n");
+}
+
+void Scene::build(unsigned seed) {
     CelestialBody sun;
     sun.name = "Sol";
     sun.buildLods(Material{"Sol", Vec3{1.0f, 0.8f, 0.3f}});
@@ -110,6 +173,12 @@ void Scene::build() {
     bakers.emplace_back([this]() { bakeGlacia(bodies[2].textures, GLACIA_SEED, 512); });
     bakers.emplace_back([this]() { bakeVergel(bodies[3].textures, VERGEL_SEED, 512); });
     for (std::thread& t : bakers) t.join();
+
+    for (unsigned i = 0; i < 3; ++i) rockModels.push_back(makeRock(100 + i)); // 3 variantes de roca
+    treeModel = makeAlienTree();
+    crystalModel = makeCrystalCluster();
+    beaconModel = makeBeacon();
+    buildProps(seed);
 
     // Direcciones uniformes sobre la esfera: z uniforme en [-1, 1] y un
     // angulo uniforme alrededor. La semilla fija da siempre el mismo cielo.
@@ -170,6 +239,17 @@ void Scene::drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const O
         u.textures = &body.textures;
         u.textureMotion = body.cloudPeriod > 0.0f ? rotateY(2.0f * PI * u.time / body.cloudPeriod) : Mat4::identity();
         drawMesh(fb, body.lods[body.currentLod], u, body.shader, stats);
+
+        // Objetos de superficie: solo de cerca (LOD 0 o 1). Se dibujan con la
+        // matriz del planeta sin escala, asi giran y orbitan junto con el.
+        bool near = body.currentLod <= 1;
+        if (!body.props.triangles.empty() && near &&
+            (!opt.cullObjects || sphereInFrustum(u, center, body.radius + body.propHeight))) {
+            u.model = body.frameMatrix(u.time);
+            u.objectCenter = center;
+            drawMesh(fb, body.props, u, propShader, stats);
+            stats.propsDrawn += body.propCount;
+        }
     }
     u.textures = nullptr;
 }
