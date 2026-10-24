@@ -41,5 +41,7 @@ void scatterProps(const ScatterRule& rule, unsigned seed, const Noise& density, 
 // Junta todas las instancias en una sola malla en el espacio local del
 // planeta (sin escala): cada una se apoya en la superficie con su "arriba"
 // igual a la vertical de ese punto. Asi se dibujan todas con una sola llamada
-// y giran solas con el planeta.
-Mesh mergeProps(const std::vector<PropInstance>& instances, float planetRadius);
+// y giran solas con el planeta. shape (opcional) da la altura real del
+// terreno si el planeta esta deformado (1 = esfera).
+Mesh mergeProps(const std::vector<PropInstance>& instances, float planetRadius,
+                const std::function<float(const Vec3&)>& shape = nullptr);

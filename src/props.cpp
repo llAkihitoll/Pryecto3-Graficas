@@ -111,7 +111,7 @@ Mesh makeCrystalCluster() {
 
 Mesh makeBeacon() {
     MeshBuilder b;
-    int metal = b.material("Metal", {0.58f, 0.59f, 0.64f}, 0.6f, 40.0f);
+    int metal = b.material("Metal", {0.58f, 0.59f, 0.64f}, 0.35f, 40.0f);
     int lamp = b.material("Luz", {1.0f, 0.18f, 0.1f}, 0.0f, 1.0f, 1.0f);
     b.frustum(4, 0.9f, 0.55f, -0.2f, 0.5f, metal);  // base
     b.frustum(4, 0.09f, 0.06f, 0.5f, 4.2f, metal);  // mastil
@@ -161,7 +161,8 @@ void scatterProps(const ScatterRule& rule, unsigned seed, const Noise& density, 
     }
 }
 
-Mesh mergeProps(const std::vector<PropInstance>& instances, float planetRadius) {
+Mesh mergeProps(const std::vector<PropInstance>& instances, float planetRadius,
+                const std::function<float(const Vec3&)>& shape) {
     Mesh merged;
     // Los materiales de cada modelo se copian una sola vez y todas sus
     // instancias los comparten.
@@ -174,7 +175,8 @@ Mesh mergeProps(const std::vector<PropInstance>& instances, float planetRadius) 
         Vec3 right = normalize(cross(helper, up));
         Vec3 back = cross(right, up);
         // Se hunde un poco para que la base no quede flotando en la curva.
-        Vec3 position = up * (planetRadius - 0.1f * inst.scale);
+        float ground = planetRadius * (shape ? shape(up) : 1.0f);
+        Vec3 position = up * (ground - 0.1f * inst.scale);
         Mat4 local = fromBasis(right, up, back, position) * rotateY(inst.yaw) * scale(inst.scale);
 
         auto found = materialOffsets.find(inst.model);
