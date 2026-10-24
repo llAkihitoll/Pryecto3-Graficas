@@ -13,6 +13,10 @@ endif()
 find_package(SDL2 REQUIRED)
 # Hilos para hornear las texturas de los planetas en paralelo.
 find_package(Threads REQUIRED)
+# zlib solo descomprime los datos de los PNG de los mapas de normales del
+# carro (el resto del lector de PNG es propio). Estatica para no depender de su DLL.
+set(ZLIB_USE_STATIC_LIBS ON)
+find_package(ZLIB REQUIRED)
 
 add_executable(galaxia
     src/main.cpp
@@ -31,10 +35,11 @@ add_executable(galaxia
     src/scene.cpp
     src/shaders.cpp
     src/ship.cpp
+    src/texture.cpp
 )
 
 target_include_directories(galaxia PRIVATE ${SDL2_INCLUDE_DIRS})
-target_link_libraries(galaxia PRIVATE Threads::Threads)
+target_link_libraries(galaxia PRIVATE Threads::Threads ZLIB::ZLIB)
 
 if(TARGET SDL2::SDL2main)
     target_link_libraries(galaxia PRIVATE SDL2::SDL2main)
