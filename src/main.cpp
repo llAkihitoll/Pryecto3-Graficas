@@ -96,14 +96,20 @@ ShipInput readKeyboard() {
     return in;
 }
 
-// Esferas de colision de todos los cuerpos en este instante. Los planetas
-// tienen una zona de acercamiento de 4 radios; el sol solo colisiona.
+// Esferas de colision de todos los cuerpos en este instante. En los planetas
+// el carro empieza a frenar a 2.5 radios de altitud, entra al modo superficie
+// a 1.5 radios y su gravedad solo alcanza hasta 3 radios del centro. El sol no
+// tiene modo superficie y su gravedad alcanza 5 radios.
 std::vector<SphereCollider> collidersAt(const Scene& scene, float time) {
     std::vector<SphereCollider> colliders;
     for (size_t i = 0; i < scene.bodies.size(); ++i) {
         const CelestialBody& b = scene.bodies[i];
-        float zone = i == 0 ? 0.0f : 4.0f * b.radius;
-        SphereCollider c{b.position(time), b.velocity(time), b.radius, zone, b.surfaceGravity};
+        bool sun = i == 0;
+        SphereCollider c{b.position(time), b.velocity(time), b.radius};
+        c.surfaceGravity = b.surfaceGravity;
+        c.slowZone = sun ? 0.0f : 2.5f * b.radius;
+        c.surfaceZone = sun ? 0.0f : 1.5f * b.radius;
+        c.gravityRange = (sun ? 5.0f : 3.0f) * b.radius;
         if (b.shape && scene.deformTerrain) {
             // Giro inverso del planeta (deshace la inclinacion y el giro en orden contrario).
             c.shape = b.shape;

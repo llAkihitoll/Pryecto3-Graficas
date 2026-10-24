@@ -8,8 +8,10 @@ struct SphereCollider {
     Vec3 center;
     Vec3 velocity;     // velocidad orbital del cuerpo
     float radius;
-    float zone = 0.0f; // altitud donde empieza el modo de acercamiento (0 = no tiene)
+    float slowZone = 0.0f;       // altitud donde el carro empieza a frenar y a moverse con el planeta (0 = no tiene)
     float surfaceGravity = 0.0f; // aceleracion de la gravedad en su superficie (unidades/s^2)
+    float surfaceZone = 0.0f;    // altitud donde se activa el modo superficie (0 = no tiene)
+    float gravityRange = 0.0f;   // distancia al centro donde la gravedad ya no actua (0 = sin limite)
 
     // Si el planeta esta deformado: su forma (en el espacio local del
     // planeta) y el giro inverso para pasar una direccion del mundo a ese espacio.

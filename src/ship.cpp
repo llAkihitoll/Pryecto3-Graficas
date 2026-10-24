@@ -7,6 +7,11 @@
 // recorrido es el mismo en una computadora lenta y en una rapida.
 const float FIXED_STEP = 1.0f / 120.0f;
 
+static float smoothstep(float a, float b, float x) {
+    float t = clampf((x - a) / (b - a), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 // Factor para acercarse a un objetivo de forma exponencial: con la misma
 // "rapidez" el resultado no depende del tamano del paso.
 static float approach(float rate, float h) { return 1.0f - std::exp(-rate * h); }
@@ -67,15 +72,17 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
             nearest = (int)i;
         }
     }
-    // closeness: 0 fuera de la zona, 1 tocando la superficie.
+    // closeness: 0 fuera de la zona de frenado, 1 tocando la superficie.
     float closeness = 0.0f;
-    if (nearest >= 0 && bodies[nearest].zone > 0.0f) {
-        closeness = clampf(1.0f - altitude / bodies[nearest].zone, 0.0f, 1.0f);
+    if (nearest >= 0 && bodies[nearest].slowZone > 0.0f) {
+        closeness = clampf(1.0f - altitude / bodies[nearest].slowZone, 0.0f, 1.0f);
     }
 
-    // Modo de superficie: dentro de la zona (si no se apago con F).
+    // Modo de superficie: solo ya cerca del suelo (si no se apago con F).
+    // Su zona es mas chica que la de frenado: pasar cerca de un planeta no
+    // atrapa al carro, solo lo frena un poco.
     bool wasSurface = surfaceMode;
-    surfaceMode = surfaceEnabled && closeness > 0.0f;
+    surfaceMode = surfaceEnabled && nearest >= 0 && altitude < bodies[nearest].surfaceZone;
     Vec3 n; // vertical del planeta en la posicion del carro
     if (surfaceMode) {
         n = normalize(position - bodies[nearest].center);
@@ -175,6 +182,10 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
             Vec3 d = b.center - position;
             float r2 = std::max(dot(d, d), b.radius * b.radius);
             float a = b.surfaceGravity * b.radius * b.radius / r2;
+            // Alcance limitado: la atraccion se desvanece en el ultimo tercio
+            // del alcance y mas alla no existe, para que viajar entre
+            // planetas no se sienta como ser jalado todo el tiempo.
+            if (b.gravityRange > 0.0f) a *= 1.0f - smoothstep(b.gravityRange * 0.66f, b.gravityRange, std::sqrt(r2));
             gravityVelocity += d * (a / std::sqrt(r2) * h);
         }
         gravityVelocity = gravityVelocity * std::exp(-(in.brake ? t.stabilize : t.gravityDrag) * h);
