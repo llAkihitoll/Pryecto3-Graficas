@@ -60,6 +60,9 @@ static DuneSample duneAt(const Noise& noise, const Vec3& p) {
     return s;
 }
 
+float duneBaseRelief(const Noise& terrain, const Vec3& p) { return duneAt(terrain, p).base; }
+float duneCrater(const Noise& terrain, const Vec3& p) { return duneAt(terrain, p).craterBig; }
+
 void bakeDune(PlanetTextures& tex, unsigned seed, int size) {
     Noise noise(seed);
     const Vec3 rust{0.55f, 0.24f, 0.12f}, sand{0.86f, 0.54f, 0.30f}, pale{0.94f, 0.79f, 0.56f};
@@ -95,6 +98,8 @@ static float glaciaHeight(const Noise& noise, const Vec3& p) {
     return noise.fbm(p * 3.0f, 4) * 0.3f - bigCracks * 0.5f - smallCracks * 0.2f;
 }
 
+float glaciaCrack(const Noise& terrain, const Vec3& p) { return crackAt(terrain, p, 5.0f, 0.09f); }
+
 void bakeGlacia(PlanetTextures& tex, unsigned seed, int size) {
     Noise noise(seed);
     const Vec3 iceLight{0.80f, 0.91f, 0.98f}, iceDeep{0.52f, 0.70f, 0.90f};
@@ -116,10 +121,11 @@ void bakeGlacia(PlanetTextures& tex, unsigned seed, int size) {
 
 // ---------------------------------------------------------------- Vergel
 
-static const float SEA_LEVEL = 0.02f;
+const float VERGEL_SEA_LEVEL = 0.02f;
+static const float SEA_LEVEL = VERGEL_SEA_LEVEL;
 
 // Elevacion del terreno: positiva = tierra, menor que SEA_LEVEL = mar.
-static float vergelElevation(const Noise& noise, const Vec3& p) {
+float vergelElevation(const Noise& noise, const Vec3& p) {
     return noise.fbm(p * 1.6f, 6) + 0.12f * noise.fbm(p * 7.0f, 3);
 }
 
