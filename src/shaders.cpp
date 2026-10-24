@@ -90,3 +90,57 @@ Vec3 duneShader(const Fragment& f, const Uniforms& u) {
 
     return albedo * diffuse + night + haze;
 }
+
+Vec3 glaciaShader(const Fragment& f, const Uniforms& u) {
+    Vec3 dir = normalize(f.localPos);
+    Vec3 albedo = u.textures->color.sample(dir);
+    float crack = u.textures->mask.sample(dir);
+    Vec3 n = normalize(u.model.transformDir(u.textures->normal.sample(dir)));
+    Vec3 geo = f.normal;
+
+    Vec3 toLight = normalize(u.lightPos - f.worldPos);
+    Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
+    float day = smoothstep(-0.1f, 0.2f, dot(geo, toLight));
+
+    float diffuse = std::max(0.0f, dot(n, toLight)) * day;
+    // Brillo especular muy concentrado: el hielo es liso y refleja el sol.
+    Vec3 half = normalize(toLight + toCamera);
+    float spec = std::pow(std::max(0.0f, dot(n, half)), 70.0f) * 0.9f * day;
+
+    // Fresnel: de canto el hielo refleja mas el "cielo" y se ve azulado.
+    float edge = 1.0f - std::max(0.0f, dot(geo, toCamera));
+    Vec3 fresnel = Vec3{0.45f, 0.75f, 1.0f} * (edge * edge * edge * 0.6f);
+
+    // Las grietas brillan con luz propia, mas fuerte en el lado de noche.
+    Vec3 glow = Vec3{0.15f, 0.75f, 1.0f} * (crack * (0.35f + 0.65f * (1.0f - day)));
+
+    return albedo * (0.05f + 0.9f * diffuse) + Vec3{1, 1, 1} * spec + fresnel + glow;
+}
+
+Vec3 vergelShader(const Fragment& f, const Uniforms& u) {
+    Vec3 dir = normalize(f.localPos);
+    Vec3 albedo = u.textures->color.sample(dir);
+    float water = u.textures->mask.sample(dir);
+    Vec3 n = normalize(u.model.transformDir(u.textures->normal.sample(dir)));
+    Vec3 geo = f.normal;
+
+    Vec3 toLight = normalize(u.lightPos - f.worldPos);
+    Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
+    float day = smoothstep(-0.12f, 0.22f, dot(geo, toLight));
+
+    float diffuse = std::max(0.0f, dot(n, toLight)) * day;
+    // Reflejo del sol en el oceano (con la normal lisa de la esfera).
+    Vec3 half = normalize(toLight + toCamera);
+    float glint = water * std::pow(std::max(0.0f, dot(geo, half)), 45.0f) * 0.8f * day;
+    Vec3 ground = albedo * (0.03f + diffuse) + Vec3{1.0f, 0.95f, 0.85f} * glint;
+
+    // Nubes: la misma capa leida con un giro que cambia con el tiempo, asi
+    // se desplazan sobre los continentes.
+    float cloud = u.textures->clouds.sample(u.textureMotion.transformDir(dir));
+    float cloudLight = 0.06f + 0.94f * std::max(0.0f, dot(geo, toLight)) * day;
+    Vec3 color = lerp(ground, Vec3{cloudLight, cloudLight, cloudLight}, cloud * 0.85f);
+
+    float edge = 1.0f - std::max(0.0f, dot(geo, toCamera));
+    Vec3 atmosphere = Vec3{0.35f, 0.6f, 1.0f} * (edge * edge * edge * (0.12f + 0.88f * day) * 0.7f);
+    return color + atmosphere;
+}

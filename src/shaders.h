@@ -17,3 +17,11 @@ Vec3 sunShader(const Fragment& f, const Uniforms& u);
 // planeta), ilumina con el sol, suaviza la linea dia/noche, agrega una luz
 // de relleno azulada en el lado de noche y una bruma de atmosfera en el borde.
 Vec3 duneShader(const Fragment& f, const Uniforms& u);
+
+// Glacia: hielo con reflejo especular muy concentrado, borde azulado
+// (Fresnel) y grietas que emiten luz propia, mas visibles de noche.
+Vec3 glaciaShader(const Fragment& f, const Uniforms& u);
+
+// Vergel: tierra con relieve, el sol se refleja solo en el agua, una capa de
+// nubes que se mueve sobre la superficie y atmosfera azul en el borde.
+Vec3 vergelShader(const Fragment& f, const Uniforms& u);
