@@ -61,7 +61,7 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
     nearest = -1;
     altitude = 1e9f;
     for (size_t i = 0; i < bodies.size(); ++i) {
-        float alt = length(position - bodies[i].center) - bodies[i].radius;
+        float alt = length(position - bodies[i].center) - bodies[i].surfaceRadius(position);
         if (alt < altitude) {
             altitude = alt;
             nearest = (int)i;
@@ -205,7 +205,7 @@ void Ship::collide(const std::vector<SphereCollider>& bodies) {
     for (const SphereCollider& b : bodies) {
         Vec3 d = position - b.center;
         float dist = length(d);
-        float minDist = b.radius + tuning.collisionRadius;
+        float minDist = b.surfaceRadius(position) + tuning.collisionRadius;
         if (dist >= minDist) continue;
 
         Vec3 n = dist > 1e-4f ? d * (1.0f / dist) : Vec3{0, 1, 0};

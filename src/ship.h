@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <vector>
 #include "math3d.h"
 
@@ -8,6 +9,17 @@ struct SphereCollider {
     Vec3 velocity;     // velocidad orbital del cuerpo
     float radius;
     float zone = 0.0f; // altitud donde empieza el modo de acercamiento (0 = no tiene)
+
+    // Si el planeta esta deformado: su forma (en el espacio local del
+    // planeta) y el giro inverso para pasar una direccion del mundo a ese espacio.
+    std::function<float(const Vec3&)> shape;
+    Mat4 toLocal = Mat4::identity();
+
+    // Distancia del centro a la superficie en la direccion de "point".
+    float surfaceRadius(const Vec3& point) const {
+        if (!shape) return radius;
+        return radius * shape(toLocal.transformDir(normalize(point - center)));
+    }
 };
 
 // Teclas que estan presionadas en este momento (las llena main.cpp).

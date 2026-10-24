@@ -95,7 +95,13 @@ std::vector<SphereCollider> collidersAt(const Scene& scene, float time) {
     for (size_t i = 0; i < scene.bodies.size(); ++i) {
         const CelestialBody& b = scene.bodies[i];
         float zone = i == 0 ? 0.0f : 4.0f * b.radius;
-        colliders.push_back(SphereCollider{b.position(time), b.velocity(time), b.radius, zone});
+        SphereCollider c{b.position(time), b.velocity(time), b.radius, zone};
+        if (b.shape && scene.deformTerrain) {
+            // Giro inverso del planeta (deshace la inclinacion y el giro en orden contrario).
+            c.shape = b.shape;
+            c.toLocal = rotateY(-b.spinAngle(time)) * rotateZ(-b.axialTilt);
+        }
+        colliders.push_back(c);
     }
     return colliders;
 }
@@ -152,6 +158,7 @@ int main(int argc, char* argv[]) {
     //   --no-opt                  sin descarte de objetos ni LOD (para comparar)
     //   --near N                  empieza frente al lado de dia del cuerpo N (1 = Duna, 2 = Glacia...)
     //   --seed N                  semilla para repartir los objetos de superficie
+    //   --flat                    Duna sin deformar (esfera), para comparar
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f;
@@ -159,6 +166,7 @@ int main(int argc, char* argv[]) {
     bool dtTest = false;
     int nearBody = -1;
     unsigned propSeed = 2026;
+    bool flatTerrain = false;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
@@ -171,6 +179,7 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--no-opt") == 0) opt.cullObjects = opt.autoLod = false;
         else if (std::strcmp(argv[i], "--near") == 0 && i + 1 < argc) nearBody = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--seed") == 0 && i + 1 < argc) propSeed = (unsigned)std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--flat") == 0) flatTerrain = true;
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
 
@@ -178,6 +187,10 @@ int main(int argc, char* argv[]) {
     auto buildStart = std::chrono::steady_clock::now();
     Scene scene;
     scene.build(propSeed);
+    if (flatTerrain) {
+        scene.deformTerrain = false;
+        scene.buildProps(propSeed);
+    }
     std::printf("Escena lista (texturas horneadas) en %.0f ms\n",
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - buildStart).count());
     if (dtTest) {
@@ -289,6 +302,10 @@ int main(int argc, char* argv[]) {
                     case SDLK_l: opt.autoLod = !opt.autoLod; break;
                     case SDLK_o: opt.cullObjects = !opt.cullObjects; break;
                     case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
+                    case SDLK_g: // deformacion de Duna: los objetos se vuelven a apoyar en el suelo
+                        scene.deformTerrain = !scene.deformTerrain;
+                        scene.buildProps(scene.propSeed);
+                        break;
                     case SDLK_f: ship.surfaceEnabled = !ship.surfaceEnabled; break;
                     case SDLK_b: u.cullBackFaces = !u.cullBackFaces; break;
                     case SDLK_r:
@@ -365,11 +382,12 @@ int main(int argc, char* argv[]) {
             std::snprintf(title, sizeof(title),
                           "Proyecto 3 - Galaxia | %.0f FPS | vel %.1f | boost %.0f%% | %s a %.1f%s | "
                           "objetos %d (descartados %d) | superficie %d (semilla %u) | tris %d / raster %d | "
-                          "descarte %s, LOD %s",
+                          "descarte %s, LOD %s, relieve %s",
                           framesCounted / titleTimer, speed, 100.0f * ship.boostFuel / ship.tuning.boostCapacity,
                           nearName, ship.altitude, ship.surfaceMode ? " (superficie)" : "", stats.objectsDrawn,
                           stats.objectsCulled, stats.propsDrawn, scene.propSeed, stats.trianglesIn,
-                          stats.trianglesDrawn, opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no");
+                          stats.trianglesDrawn, opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no",
+                          scene.deformTerrain ? "si" : "no");
             SDL_SetWindowTitle(window, title);
             titleTimer = 0.0f;
             framesCounted = 0;
