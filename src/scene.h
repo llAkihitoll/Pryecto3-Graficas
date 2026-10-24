@@ -9,7 +9,10 @@
 // asi se mueven igual sin importar los FPS.
 struct CelestialBody {
     std::string name;
-    Mesh mesh;              // esfera unitaria, se escala con el radio
+    // Niveles de detalle: la misma esfera unitaria con mas o menos
+    // subdivisiones. lods[0] es la mas detallada.
+    std::vector<Mesh> lods;
+    mutable int currentLod = 0; // el que se uso en el ultimo cuadro (-1 = descartado)
     FragmentShader shader;
     PlanetTextures textures; // superficie horneada al arrancar
     float radius = 1.0f;
@@ -18,6 +21,11 @@ struct CelestialBody {
     float orbitPhase = 0.0f;  // angulo inicial en la orbita (radianes)
     float spinPeriod = 0.0f;  // segundos para dar una vuelta sobre su eje
     float axialTilt = 0.0f;   // inclinacion del eje de rotacion (radianes)
+
+    // Crea los niveles de detalle (de 20480 a 320 triangulos).
+    void buildLods(const Material& material);
+    // Elige el nivel segun cuantos pixeles de radio ocupa en pantalla.
+    int chooseLod(float screenRadius) const;
 
     Vec3 position(float time) const;
     Vec3 velocity(float time) const; // derivada de position(): para la colision
@@ -43,5 +51,5 @@ struct Scene {
     // Las estrellas se dibujan primero, como fondo: solo se aplica la
     // rotacion de la vista (sin traslacion) y la proyeccion.
     void drawStars(Framebuffer& fb, const Uniforms& u) const;
-    void drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats) const;
+    void drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Optimizations& opt) const;
 };

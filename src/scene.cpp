@@ -11,6 +11,25 @@ const unsigned SUN_SEED = 7;
 const unsigned DUNE_SEED = 42;
 const int STAR_COUNT = 1800;
 
+// Subdivisiones de cada nivel de detalle y desde cuantos pixeles de radio
+// en pantalla se usa. Mientras mas grande se ve, mas triangulos necesita
+// para que el borde no se vea poligonal.
+const int LOD_SUBDIVISIONS[] = {5, 4, 3, 2};       // 20480, 5120, 1280, 320 triangulos
+const float LOD_MIN_PIXELS[] = {250.0f, 80.0f, 25.0f, 0.0f};
+const int LOD_COUNT = 4;
+
+void CelestialBody::buildLods(const Material& material) {
+    lods.clear();
+    for (int i = 0; i < LOD_COUNT; ++i) lods.push_back(makeIcosphere(LOD_SUBDIVISIONS[i], material));
+}
+
+int CelestialBody::chooseLod(float screenRadius) const {
+    for (int i = 0; i < LOD_COUNT; ++i) {
+        if (screenRadius >= LOD_MIN_PIXELS[i]) return i;
+    }
+    return LOD_COUNT - 1;
+}
+
 Vec3 CelestialBody::position(float time) const {
     if (orbitPeriod <= 0.0f) return Vec3{0, 0, 0};
     float angle = orbitPhase + 2.0f * PI * time / orbitPeriod;
@@ -35,7 +54,7 @@ Mat4 CelestialBody::modelMatrix(float time) const {
 void Scene::build() {
     CelestialBody sun;
     sun.name = "Sol";
-    sun.mesh = makeIcosphere(3, Material{"Sol", Vec3{1.0f, 0.8f, 0.3f}});
+    sun.buildLods(Material{"Sol", Vec3{1.0f, 0.8f, 0.3f}});
     sun.shader = sunShader;
     sun.radius = 30.0f;
     sun.spinPeriod = 60.0f;
@@ -44,7 +63,7 @@ void Scene::build() {
 
     CelestialBody dune;
     dune.name = "Duna";
-    dune.mesh = makeIcosphere(4, Material{"Duna", Vec3{0.85f, 0.55f, 0.32f}});
+    dune.buildLods(Material{"Duna", Vec3{0.85f, 0.55f, 0.32f}});
     dune.shader = duneShader;
     dune.radius = 10.0f;
     dune.orbitRadius = 140.0f;
@@ -93,11 +112,25 @@ void Scene::drawStars(Framebuffer& fb, const Uniforms& u) const {
     }
 }
 
-void Scene::drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats) const {
+void Scene::drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Optimizations& opt) const {
     for (const CelestialBody& body : bodies) {
+        Vec3 center = body.position(u.time);
+
+        // Descarte: si la esfera del cuerpo no toca el volumen de vision,
+        // no se transforma ni un solo vertice.
+        if (opt.cullObjects && !sphereInFrustum(u, center, body.radius)) {
+            stats.objectsCulled++;
+            body.currentLod = -1;
+            continue;
+        }
+        stats.objectsDrawn++;
+
+        // Nivel de detalle segun el tamano en pantalla (que depende de la distancia).
+        body.currentLod = opt.autoLod ? body.chooseLod(projectedRadius(u, center, body.radius, fb.height())) : 0;
+
         u.model = body.modelMatrix(u.time);
         u.textures = &body.textures;
-        drawMesh(fb, body.mesh, u, body.shader, stats);
+        drawMesh(fb, body.lods[body.currentLod], u, body.shader, stats);
     }
     u.textures = nullptr;
 }
