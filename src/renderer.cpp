@@ -202,6 +202,18 @@ bool sphereInFrustum(const Uniforms& u, const Vec3& center, float radius) {
     return true;
 }
 
+void drawPoint3D(Framebuffer& fb, const Uniforms& u, const Vec3& world, uint32_t argb, int size) {
+    Vec4 c = u.projection * u.view * Vec4(world, 1.0f);
+    if (c.z < -c.w || c.w <= 0.0f) return; // detras de la camara o del plano cercano
+    ScreenVertex s = toScreen(c, fb.width(), fb.height());
+    int x0 = (int)s.x - size / 2, y0 = (int)s.y - size / 2;
+    for (int y = y0; y < y0 + size; ++y)
+        for (int x = x0; x < x0 + size; ++x) {
+            if (x < 0 || y < 0 || x >= fb.width() || y >= fb.height()) continue;
+            if (s.invW > fb.depthAt(x, y)) fb.setPixel(x, y, argb);
+        }
+}
+
 float projectedRadius(const Uniforms& u, const Vec3& center, float radius, int screenHeight) {
     float dist = length(center - u.cameraPos);
     if (dist <= radius) return 1e9f; // la camara esta adentro o tocandola

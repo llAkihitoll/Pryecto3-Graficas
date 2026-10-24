@@ -62,6 +62,11 @@ struct Optimizations {
 // volumen de vision de la camara descrita por u.view y u.projection.
 bool sphereInFrustum(const Uniforms& u, const Vec3& center, float radius);
 
+// Dibuja un punto 3D (cuadradito de "size" pixeles) con prueba de
+// profundidad, sin escribirla: lo tapa lo que este delante. Se usa para la
+// trayectoria prevista del carro.
+void drawPoint3D(Framebuffer& fb, const Uniforms& u, const Vec3& world, uint32_t argb, int size);
+
 // Cuantos pixeles de radio ocupa en pantalla una esfera: depende de su
 // tamano y de su distancia a la camara. Se usa para elegir el nivel de detalle.
 float projectedRadius(const Uniforms& u, const Vec3& center, float radius, int screenHeight);
