@@ -15,7 +15,8 @@ const unsigned GLACIA_SEED = 1337;
 const unsigned VERGEL_SEED = 99;
 const unsigned AURELIA_SEED = 314;
 const unsigned IGNIS_SEED = 666;
-const int STAR_COUNT = 1800;
+const int STAR_COUNT = 5000;
+const unsigned SKY_SEED = 31;
 
 // Subdivisiones de cada nivel de detalle y desde cuantos pixeles de radio
 // en pantalla se usa. Mientras mas grande se ve, mas triangulos necesita
@@ -247,6 +248,7 @@ void Scene::build(unsigned seed) {
     // todos en el vector, asi que no se mueven de memoria mientras tanto.
     std::vector<std::thread> bakers;
     bakers.emplace_back([this]() { bakeSun(bodies[0].textures, SUN_SEED, 256); });
+    bakers.emplace_back([this]() { skybox.bake(SKY_SEED, 512); });
     bakers.emplace_back([this]() { bakeDune(bodies[1].textures, DUNE_SEED, 512); });
     bakers.emplace_back([this]() { bakeGlacia(bodies[2].textures, GLACIA_SEED, 512); });
     bakers.emplace_back([this]() { bakeVergel(bodies[3].textures, VERGEL_SEED, 512); });
@@ -269,8 +271,15 @@ void Scene::build(unsigned seed) {
         float a = unit(rng) * 2.0f * PI;
         float r = std::sqrt(1.0f - z * z);
         // Muchas estrellas debiles y pocas brillantes.
-        float b = 0.25f + 0.75f * std::pow(unit(rng), 3.0f);
-        stars.push_back(Star{Vec3{r * std::cos(a), r * std::sin(a), z}, b});
+        float b = 0.15f + 0.85f * std::pow(unit(rng), 4.0f);
+        // Color segun su temperatura: pocas azules (calientes), muchas
+        // blancas, algunas amarillas y pocas anaranjadas (frias).
+        float t = unit(rng);
+        Vec3 color = t < 0.15f ? Vec3{0.65f, 0.75f, 1.0f}
+                   : t < 0.65f ? Vec3{1.0f, 1.0f, 1.0f}
+                   : t < 0.9f  ? Vec3{1.0f, 0.92f, 0.7f}
+                               : Vec3{1.0f, 0.7f, 0.45f};
+        stars.push_back(Star{Vec3{r * std::cos(a), r * std::sin(a), z}, b, color});
     }
 }
 
@@ -284,17 +293,24 @@ void Scene::drawStars(Framebuffer& fb, const Uniforms& u) const {
         Vec4 c = u.projection * Vec4(v, 1.0f);
         int x = (int)((c.x / c.w * 0.5f + 0.5f) * W);
         int y = (int)((1.0f - (c.y / c.w * 0.5f + 0.5f)) * H);
-        if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+        if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
 
-        uint32_t g = (uint32_t)(s.brightness * 255.0f);
-        uint32_t color = 0xFF000000u | (g << 16) | (g << 8) | std::min(255u, g + 30u);
-        fb.setPixel(x, y, color);
-        if (s.brightness > 0.8f) { // las mas brillantes se ven como una crucecita
-            uint32_t dim = 0xFF000000u | ((g / 2) << 16) | ((g / 2) << 8) | (g / 2);
-            fb.setPixel(x + 1, y, dim);
-            fb.setPixel(x - 1, y, dim);
-            fb.setPixel(x, y + 1, dim);
-            fb.setPixel(x, y - 1, dim);
+        // Se suma al cielo (mezcla aditiva) para que las estrellas tenues
+        // encima de una nebulosa no la tapen con un punto negro.
+        auto add = [&](int px, int py, float k) {
+            uint32_t p = fb.getPixel(px, py);
+            int r = std::min(255, (int)((p >> 16) & 0xFF) + (int)(s.color.x * k * 255.0f));
+            int g = std::min(255, (int)((p >> 8) & 0xFF) + (int)(s.color.y * k * 255.0f));
+            int b = std::min(255, (int)(p & 0xFF) + (int)(s.color.z * k * 255.0f));
+            fb.setPixel(px, py, 0xFF000000u | (r << 16) | (g << 8) | b);
+        };
+        add(x, y, s.brightness);
+        if (s.brightness > 0.75f) { // las mas brillantes: una cruz de destello
+            float k = s.brightness * 0.45f;
+            add(x + 1, y, k); add(x - 1, y, k); add(x, y + 1, k); add(x, y - 1, k);
+            if (s.brightness > 0.92f) {
+                add(x + 2, y, k * 0.4f); add(x - 2, y, k * 0.4f); add(x, y + 2, k * 0.4f); add(x, y - 2, k * 0.4f);
+            }
         }
     }
 }

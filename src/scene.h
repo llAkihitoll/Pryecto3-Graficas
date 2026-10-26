@@ -4,6 +4,7 @@
 #include "planets.h"
 #include "props.h"
 #include "renderer.h"
+#include "skybox.h"
 
 // Un sol o un planeta. Su posicion y rotacion se calculan directamente a
 // partir del tiempo transcurrido (no se suma un angulo fijo por cuadro),
@@ -59,6 +60,7 @@ struct CelestialBody {
 struct Star {
     Vec3 direction;
     float brightness;
+    Vec3 color; // segun su temperatura: azul, blanca, amarilla o anaranjada
 };
 
 // Tercera ley de Kepler: el periodo de una orbita crece con el radio a la
@@ -70,6 +72,7 @@ inline float keplerPeriod(float orbitRadius) { return KEPLER_K * std::pow(orbitR
 struct Scene {
     std::vector<CelestialBody> bodies;
     std::vector<Star> stars;
+    Skybox skybox; // nebulosas, galaxias y Via Lactea (horneado al arrancar)
 
     // Modelos de superficie (se construyen una vez y se copian en cada planeta).
     std::vector<Mesh> rockModels;

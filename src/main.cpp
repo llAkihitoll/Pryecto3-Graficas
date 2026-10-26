@@ -488,6 +488,7 @@ int main(int argc, char* argv[]) {
         Uint64 frameStart = SDL_GetPerformanceCounter();
         fb.clear();
         stats.reset();
+        scene.skybox.draw(fb, u); // nebulosas, galaxias y Via Lactea de fondo
         scene.drawStars(fb, u);
         scene.drawBodies(fb, u, stats, opt);
         if (showOrbits) scene.drawOrbits(fb, u);
