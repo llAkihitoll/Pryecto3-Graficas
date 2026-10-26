@@ -61,6 +61,12 @@ struct Star {
     float brightness;
 };
 
+// Tercera ley de Kepler: el periodo de una orbita crece con el radio a la
+// 1.5, asi que mientras mas cerca del sol, mas rapido se da la vuelta.
+// KEPLER_K fija la escala (con 0.045, Duna da una vuelta en ~75 s).
+const float KEPLER_K = 0.045f;
+inline float keplerPeriod(float orbitRadius) { return KEPLER_K * std::pow(orbitRadius, 1.5f); }
+
 struct Scene {
     std::vector<CelestialBody> bodies;
     std::vector<Star> stars;

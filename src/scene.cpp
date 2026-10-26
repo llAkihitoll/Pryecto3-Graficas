@@ -168,7 +168,7 @@ void Scene::build(unsigned seed) {
     dune.shader = duneShader;
     dune.radius = 10.0f;
     dune.orbitRadius = 140.0f;
-    dune.orbitPeriod = 240.0f;
+    dune.orbitPeriod = keplerPeriod(dune.orbitRadius);
     dune.spinPeriod = 40.0f;
     dune.axialTilt = radians(15.0f);
     dune.surfaceGravity = 10.0f;
@@ -183,7 +183,7 @@ void Scene::build(unsigned seed) {
     glacia.shader = glaciaShader;
     glacia.radius = 8.0f;
     glacia.orbitRadius = 230.0f;
-    glacia.orbitPeriod = 360.0f;
+    glacia.orbitPeriod = keplerPeriod(glacia.orbitRadius);
     glacia.orbitPhase = 0.83f;
     glacia.spinPeriod = 50.0f;
     glacia.axialTilt = radians(-25.0f);
@@ -197,7 +197,7 @@ void Scene::build(unsigned seed) {
     vergel.shader = vergelShader;
     vergel.radius = 13.0f;
     vergel.orbitRadius = 330.0f;
-    vergel.orbitPeriod = 480.0f;
+    vergel.orbitPeriod = keplerPeriod(vergel.orbitRadius);
     vergel.orbitPhase = 0.2f;
     vergel.spinPeriod = 70.0f;
     vergel.axialTilt = radians(10.0f);
@@ -212,7 +212,7 @@ void Scene::build(unsigned seed) {
     aurelia.shader = aureliaShader;
     aurelia.radius = 18.0f;
     aurelia.orbitRadius = 450.0f;
-    aurelia.orbitPeriod = 600.0f;
+    aurelia.orbitPeriod = keplerPeriod(aurelia.orbitRadius);
     aurelia.orbitPhase = 0.55f;
     aurelia.spinPeriod = 90.0f;
     aurelia.axialTilt = radians(20.0f);
@@ -234,7 +234,7 @@ void Scene::build(unsigned seed) {
     ignis.shader = ignisShader;
     ignis.radius = 9.0f;
     ignis.orbitRadius = 85.0f;
-    ignis.orbitPeriod = 150.0f;
+    ignis.orbitPeriod = keplerPeriod(ignis.orbitRadius);
     ignis.orbitPhase = 2.4f;
     ignis.spinPeriod = 35.0f;
     ignis.axialTilt = radians(5.0f);
