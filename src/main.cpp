@@ -33,6 +33,9 @@ const float Z_FAR = 5000.0f;
 // para que se vea el lado de dia y el de noche.
 const Vec3 CAR_START{-70.0f, 8.0f, 90.0f};
 
+// Segundos que pasan desde que el carro explota hasta que reaparece.
+const float RESPAWN_DELAY = 3.0f;
+
 // Cinturon de asteroides: cuantas rocas y con que semilla se reparten.
 const int ASTEROID_COUNT = 220;
 const unsigned ASTEROID_SEED = 4242;
@@ -116,6 +119,7 @@ std::vector<SphereCollider> collidersAt(const Scene& scene, float time) {
         c.slowZone = sun ? 0.0f : 2.5f * b.radius;
         c.surfaceZone = sun ? 0.0f : 1.5f * b.radius;
         c.gravityRange = (sun ? 5.0f : 3.0f) * b.radius;
+        c.deadly = sun; // tocar el sol destruye el carro
         if (b.shape && scene.deformTerrain) {
             // Giro inverso del planeta (deshace la inclinacion y el giro en orden contrario).
             c.shape = b.shape;
@@ -178,6 +182,8 @@ int main(int argc, char* argv[]) {
     //   --zoom D                  distancia de la camara al carro
     //   --no-opt                  sin descarte de objetos ni LOD (para comparar)
     //   --near N                  empieza frente al lado de dia del cuerpo N (1 = Duna, 2 = Glacia...)
+    //   --near-dist D             con --near: a D unidades del centro, apuntando a donde
+    //                             estara el planeta (para probar choques en picada)
     //   --seed N                  semilla para repartir los objetos de superficie
     //   --flat                    Duna sin deformar (esfera), para comparar
     //   --hide-help               empieza sin el panel de controles
@@ -190,6 +196,7 @@ int main(int argc, char* argv[]) {
     std::string flightScript;
     bool dtTest = false;
     int nearBody = -1;
+    float nearDist = 0.0f;
     unsigned propSeed = 2026;
     bool flatTerrain = false;
     bool showHelp = true;
@@ -209,6 +216,7 @@ int main(int argc, char* argv[]) {
         }
         else if (std::strcmp(argv[i], "--no-opt") == 0) opt.cullObjects = opt.autoLod = false;
         else if (std::strcmp(argv[i], "--near") == 0 && i + 1 < argc) nearBody = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--near-dist") == 0 && i + 1 < argc) nearDist = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--seed") == 0 && i + 1 < argc) propSeed = (unsigned)std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--flat") == 0) flatTerrain = true;
         else if (std::strcmp(argv[i], "--hide-help") == 0) showHelp = false;
@@ -282,10 +290,25 @@ int main(int argc, char* argv[]) {
     const Vec3 exhausts[2] = {EXHAUST_LEFT, EXHAUST_RIGHT};
     Vec3 lastExhaust[2];      // donde estaban los escapes en el cuadro anterior
     bool wasBoosting = false;
+    // Explosion del carro: cuando la fisica marca "crashed" se lanza una vez
+    // la explosion y empieza la cuenta para reaparecer.
+    bool crashShown = false;
+    float respawnTimer = 0.0f;
     auto updateEffects = [&](float step, const std::vector<SphereCollider>& colliders) {
-        belt.collideShip(ship);
+        if (ship.crashed) {
+            if (!crashShown) {
+                Vec3 bodyVel = colliders[ship.crashBody].velocity;
+                particles.burst(ship.crashPoint, bodyVel, 20, 0.0f, 2.0f, 30.0f, 0.2f, 0.4f);    // fogonazo
+                particles.burst(ship.crashPoint, bodyVel, 220, 4.0f, 14.0f, 9.0f, 1.0f, 2.0f);  // fuego y humo
+                crashShown = true;
+                respawnTimer = RESPAWN_DELAY;
+            }
+            respawnTimer -= step;
+        } else {
+            belt.collideShip(ship);
+        }
         belt.update(elapsed, step, colliders, particles);
-        if (ship.boosting) {
+        if (ship.boosting && !ship.crashed) {
             Mat4 carMatrix = ship.modelMatrix();
             for (int i = 0; i < 2; ++i) {
                 Vec3 now = carMatrix.transformPoint(exhausts[i]);
@@ -301,8 +324,10 @@ int main(int argc, char* argv[]) {
         const CelestialBody& b = scene.bodies[nearBody];
         Vec3 center = b.position(elapsed);
         Vec3 towardSun = normalize(scene.sunPosition(elapsed) - center);
-        ship.position = center + normalize(towardSun + Vec3{0.0f, 0.3f, 0.0f}) * (b.radius * 3.0f);
-        ship.lookAt(center);
+        float dist = nearDist > 0.0f ? nearDist : b.radius * 3.0f;
+        ship.position = center + normalize(towardSun + Vec3{0.0f, 0.3f, 0.0f}) * dist;
+        // Con --near-dist apunta adelante del planeta (a ~45 u/s llega cuando el planeta ya avanzo).
+        ship.lookAt(nearDist > 0.0f ? b.position(elapsed + dist / 45.0f) : center);
     }
     if (testImpact) {
         // Se apunta a donde estara Duna cuando llegue la roca (el planeta se mueve).
@@ -315,6 +340,18 @@ int main(int argc, char* argv[]) {
     if (testHit) belt.launchForTest(ship.position + ship.forward * 8.0f, Vec3{0, 0, 0});
     ChaseCamera camera;
     camera.snapTo(ship);
+
+    // Al explotar, la camara se aleja del punto de impacto (hacia afuera del
+    // cuerpo) y se queda mirando la explosion hasta que el carro reaparece.
+    bool crashCameraPlaced = false;
+    auto placeCrashCamera = [&](const std::vector<SphereCollider>& colliders) {
+        if (!ship.crashed || crashCameraPlaced) return;
+        Vec3 outward = normalize(ship.crashPoint - colliders[ship.crashBody].center);
+        Vec3 dir = normalize(normalize(camera.eye - ship.crashPoint) + outward);
+        camera.eye = ship.crashPoint + dir * 18.0f;
+        camera.target = ship.crashPoint;
+        crashCameraPlaced = true;
+    };
 
     // Modo de prueba: simula el guion de vuelo a 60 FPS antes de la captura
     // e imprime la altitud al final de cada tramo, y cuantos grados ha
@@ -333,7 +370,8 @@ int main(int argc, char* argv[]) {
                 std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
                 ship.update(in, 1.0f / 60.0f, colliders);
                 updateEffects(1.0f / 60.0f, colliders);
-                camera.update(ship, 1.0f / 60.0f, false, 0, 0);
+                placeCrashCamera(colliders);
+                if (!ship.crashed) camera.update(ship, 1.0f / 60.0f, false, 0, 0);
                 elapsed += 1.0f / 60.0f;
                 Vec3 dir = normalize(ship.position - around.position(elapsed));
                 degreesAround += std::acos(clampf(dot(prevDir, dir), -1.0f, 1.0f)) * 180.0f / PI;
@@ -342,13 +380,14 @@ int main(int argc, char* argv[]) {
             std::printf("  tramo %-4s %.1f s -> altitud %.2f sobre %s, velocidad %.1f, %s, %.0f grados alrededor"
                         " | asteroides golpeados %d, explosiones %d\n",
                         seg.first.c_str(), seg.second, ship.altitude, scene.bodies[ship.nearest].name.c_str(),
-                        length(ship.velocity), ship.surfaceMode ? "superficie" : "libre", degreesAround,
+                        length(ship.velocity),
+                        ship.crashed ? "EXPLOTO" : (ship.surfaceMode ? "superficie" : "libre"), degreesAround,
                         belt.flying(), belt.explosions());
         }
         camera.lookYaw = radians(lookYawDeg);
         camera.lookPitch = radians(lookPitchDeg);
         if (zoom > 0.0f) camera.distance = zoom;
-        camera.snapTo(ship);
+        if (!ship.crashed) camera.snapTo(ship);
         camera.keepOutside(collidersAt(scene, elapsed));
     }
 
@@ -410,6 +449,8 @@ int main(int argc, char* argv[]) {
                     case SDLK_b: u.cullBackFaces = !u.cullBackFaces; break;
                     case SDLK_r:
                         ship = makeStartShip(scene, elapsed);
+                        crashShown = false;
+                        crashCameraPlaced = false;
                         camera.snapTo(ship);
                         camera.keepOutside(collidersAt(scene, elapsed));
                         break;
@@ -426,7 +467,16 @@ int main(int argc, char* argv[]) {
             lastInput = readKeyboard();
             ship.update(lastInput, dt, colliders);
             updateEffects(dt, colliders);
-            camera.update(ship, dt, looking, mouseDx, mouseDy);
+            placeCrashCamera(colliders);
+            if (ship.crashed && respawnTimer <= 0.0f) {
+                // Reaparece en el punto de inicio.
+                ship = makeStartShip(scene, elapsed);
+                crashShown = false;
+                crashCameraPlaced = false;
+                camera.snapTo(ship);
+            }
+            // Mientras esta destruido la camara se queda quieta mirando la explosion.
+            if (!ship.crashed) camera.update(ship, dt, looking, mouseDx, mouseDy);
             camera.keepOutside(colliders);
         }
 
@@ -445,7 +495,9 @@ int main(int argc, char* argv[]) {
 
         // El carro tambien pasa por el descarte y el nivel de detalle: si
         // se ve pequeno (camara lejos) basta con el modelo reducido.
-        if (!opt.cullObjects || sphereInFrustum(u, ship.position, carRadius)) {
+        if (ship.crashed) {
+            // destruido: no se dibuja el carro
+        } else if (!opt.cullObjects || sphereInFrustum(u, ship.position, carRadius)) {
             stats.objectsDrawn++;
             carUsesLod = opt.autoLod && projectedRadius(u, ship.position, carRadius, RENDER_HEIGHT) < CAR_LOD_PIXELS;
             u.model = ship.modelMatrix();
@@ -468,7 +520,7 @@ int main(int argc, char* argv[]) {
         // Trayectoria prevista: una copia del carro avanza 3 s con las mismas
         // teclas; cada punto marca donde estara. Con gravedad se ve como la
         // curvan los planetas y el sol.
-        if (showTrajectory && ship.gravityEnabled && !ship.surfaceMode) {
+        if (showTrajectory && ship.gravityEnabled && !ship.surfaceMode && !ship.crashed) {
             Ship ghost = ship;
             std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
             for (int i = 1; i <= 30; ++i) {
@@ -529,6 +581,13 @@ int main(int argc, char* argv[]) {
         hud.seed = scene.propSeed;
         hud.showHelp = showHelp;
         drawHud(fb, hud);
+        if (ship.crashed) {
+            const char* msg = "EL CARRO EXPLOTO";
+            drawText(fb, (RENDER_WIDTH - textWidth(msg, 3)) / 2, RENDER_HEIGHT / 2 - 40, msg, 0xFFFF8040, 3);
+            char sub[64];
+            std::snprintf(sub, sizeof(sub), "REAPARECE EN %.0f  (R: AHORA)", std::max(0.0f, std::ceil(respawnTimer)));
+            drawText(fb, (RENDER_WIDTH - textWidth(sub, 2)) / 2, RENDER_HEIGHT / 2, sub, 0xFFE8ECF4, 2);
+        }
         double frameMs = 1000.0 * (SDL_GetPerformanceCounter() - frameStart) / SDL_GetPerformanceFrequency();
         lastFrameMs = (float)frameMs;
 
