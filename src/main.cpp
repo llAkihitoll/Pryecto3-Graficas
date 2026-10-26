@@ -14,7 +14,9 @@
 #include "scene.h"
 #include "shaders.h"
 #include "ship.h"
+#include "asteroids.h"
 #include "boost_flame.h"
+#include "particles.h"
 
 // Resolucion interna del framebuffer. La ventana es mas grande y SDL solo
 // estira la imagen ya terminada al mostrarla.
@@ -30,6 +32,10 @@ const float Z_FAR = 5000.0f;
 // Donde empieza el carro: a un lado del planeta, con el sol de costado
 // para que se vea el lado de dia y el de noche.
 const Vec3 CAR_START{-70.0f, 8.0f, 90.0f};
+
+// Cinturon de asteroides: cuantas rocas y con que semilla se reparten.
+const int ASTEROID_COUNT = 220;
+const unsigned ASTEROID_SEED = 4242;
 
 // Por debajo de este radio en pantalla (pixeles) el carro usa el modelo reducido.
 const float CAR_LOD_PIXELS = 40.0f;
@@ -175,6 +181,8 @@ int main(int argc, char* argv[]) {
     //   --seed N                  semilla para repartir los objetos de superficie
     //   --flat                    Duna sin deformar (esfera), para comparar
     //   --hide-help               empieza sin el panel de controles
+    //   --test-impact             lanza un asteroide hacia Duna (para probar la explosion)
+    //   --test-hit                pone un asteroide quieto delante del carro (para chocarlo)
     //   --no-normal-map           sin mapas de normales en el carro, para comparar
     //   --dt-test                 prueba de consistencia con distintos FPS
     const char* screenshotPath = nullptr;
@@ -185,7 +193,9 @@ int main(int argc, char* argv[]) {
     unsigned propSeed = 2026;
     bool flatTerrain = false;
     bool showHelp = true;
-    bool showOrbits = true; // tecla T: lineas de las orbitas de los planetas
+    bool testImpact = false, testHit = false;
+    bool showOrbits = true;     // tecla T: lineas de las orbitas de los planetas
+    bool showTrajectory = true; // tecla Y: puntos de la trayectoria prevista del carro
     bool noNormalMap = false;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
@@ -202,6 +212,8 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--seed") == 0 && i + 1 < argc) propSeed = (unsigned)std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--flat") == 0) flatTerrain = true;
         else if (std::strcmp(argv[i], "--hide-help") == 0) showHelp = false;
+        else if (std::strcmp(argv[i], "--test-impact") == 0) testImpact = true;
+        else if (std::strcmp(argv[i], "--test-hit") == 0) testHit = true;
         else if (std::strcmp(argv[i], "--no-normal-map") == 0) noNormalMap = true;
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
     }
@@ -258,23 +270,31 @@ int main(int argc, char* argv[]) {
     Ship ship = makeStartShip(scene, elapsed);
     ShipInput lastInput; // teclas del ultimo cuadro, para predecir la trayectoria
 
-    // Estela del boost: mientras haya boost, cada escape suelta particulas
-    // hacia atras; como quedan en el mundo, forman un rastro detras del carro.
-    BoostTrail trail;
+    // Particulas (estela del boost y explosiones) y cinturon de asteroides.
+    Particles particles;
+    AsteroidBelt belt;
+    belt.build(ASTEROID_SEED, scene.rockModels, ASTEROID_COUNT);
+
+    // Despues de mover el carro: choques con asteroides, vuelo de los
+    // asteroides (y sus explosiones) y la estela del boost. Mientras haya
+    // boost, cada escape suelta particulas hacia atras; como quedan en el
+    // mundo, forman un rastro detras del carro.
     const Vec3 exhausts[2] = {EXHAUST_LEFT, EXHAUST_RIGHT};
     Vec3 lastExhaust[2];      // donde estaban los escapes en el cuadro anterior
     bool wasBoosting = false;
-    auto updateTrail = [&](float step) {
+    auto updateEffects = [&](float step, const std::vector<SphereCollider>& colliders) {
+        belt.collideShip(ship);
+        belt.update(elapsed, step, colliders, particles);
         if (ship.boosting) {
             Mat4 carMatrix = ship.modelMatrix();
             for (int i = 0; i < 2; ++i) {
                 Vec3 now = carMatrix.transformPoint(exhausts[i]);
-                trail.emit(wasBoosting ? lastExhaust[i] : now, now, ship.forward * -6.0f, step);
+                particles.emitStream(wasBoosting ? lastExhaust[i] : now, now, ship.forward * -6.0f, step);
                 lastExhaust[i] = now;
             }
         }
         wasBoosting = ship.boosting;
-        trail.update(step);
+        particles.update(step);
     };
     if (nearBody > 0 && nearBody < (int)scene.bodies.size()) {
         // Del lado del sol (de dia), a 3 radios del centro y mirando al planeta.
@@ -284,6 +304,15 @@ int main(int argc, char* argv[]) {
         ship.position = center + normalize(towardSun + Vec3{0.0f, 0.3f, 0.0f}) * (b.radius * 3.0f);
         ship.lookAt(center);
     }
+    if (testImpact) {
+        // Se apunta a donde estara Duna cuando llegue la roca (el planeta se mueve).
+        Vec3 from = ship.position + Vec3{2.0f, 3.0f, 0.0f};
+        float speed = 40.0f;
+        float travel = length(scene.bodies[1].position(elapsed) - from) / speed;
+        Vec3 aim = scene.bodies[1].position(elapsed + travel);
+        belt.launchForTest(from, normalize(aim - from) * speed);
+    }
+    if (testHit) belt.launchForTest(ship.position + ship.forward * 8.0f, Vec3{0, 0, 0});
     ChaseCamera camera;
     camera.snapTo(ship);
 
@@ -301,17 +330,20 @@ int main(int argc, char* argv[]) {
             if (seg.first.find('v') != std::string::npos) ship.gravityEnabled = !ship.gravityEnabled;
             int frames = (int)(seg.second * 60.0f + 0.5f);
             for (int i = 0; i < frames; ++i) {
-                ship.update(in, 1.0f / 60.0f, collidersAt(scene, elapsed));
-                updateTrail(1.0f / 60.0f);
+                std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
+                ship.update(in, 1.0f / 60.0f, colliders);
+                updateEffects(1.0f / 60.0f, colliders);
                 camera.update(ship, 1.0f / 60.0f, false, 0, 0);
                 elapsed += 1.0f / 60.0f;
                 Vec3 dir = normalize(ship.position - around.position(elapsed));
                 degreesAround += std::acos(clampf(dot(prevDir, dir), -1.0f, 1.0f)) * 180.0f / PI;
                 prevDir = dir;
             }
-            std::printf("  tramo %-4s %.1f s -> altitud %.2f sobre %s, velocidad %.1f, %s, %.0f grados alrededor\n",
+            std::printf("  tramo %-4s %.1f s -> altitud %.2f sobre %s, velocidad %.1f, %s, %.0f grados alrededor"
+                        " | asteroides golpeados %d, explosiones %d\n",
                         seg.first.c_str(), seg.second, ship.altitude, scene.bodies[ship.nearest].name.c_str(),
-                        length(ship.velocity), ship.surfaceMode ? "superficie" : "libre", degreesAround);
+                        length(ship.velocity), ship.surfaceMode ? "superficie" : "libre", degreesAround,
+                        belt.flying(), belt.explosions());
         }
         camera.lookYaw = radians(lookYawDeg);
         camera.lookPitch = radians(lookPitchDeg);
@@ -364,6 +396,7 @@ int main(int argc, char* argv[]) {
                     case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
                     case SDLK_v: ship.gravityEnabled = !ship.gravityEnabled; break;
                     case SDLK_t: showOrbits = !showOrbits; break;
+                    case SDLK_y: showTrajectory = !showTrajectory; break;
                     case SDLK_m: u.normalMapping = !u.normalMapping; break;
                     case SDLK_h:
                         showHelp = !showHelp;
@@ -392,7 +425,7 @@ int main(int argc, char* argv[]) {
             std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
             lastInput = readKeyboard();
             ship.update(lastInput, dt, colliders);
-            updateTrail(dt);
+            updateEffects(dt, colliders);
             camera.update(ship, dt, looking, mouseDx, mouseDy);
             camera.keepOutside(colliders);
         }
@@ -408,6 +441,7 @@ int main(int argc, char* argv[]) {
         scene.drawStars(fb, u);
         scene.drawBodies(fb, u, stats, opt);
         if (showOrbits) scene.drawOrbits(fb, u);
+        belt.draw(fb, u, stats, opt);
 
         // El carro tambien pasa por el descarte y el nivel de detalle: si
         // se ve pequeno (camara lejos) basta con el modelo reducido.
@@ -434,7 +468,7 @@ int main(int argc, char* argv[]) {
         // Trayectoria prevista: una copia del carro avanza 3 s con las mismas
         // teclas; cada punto marca donde estara. Con gravedad se ve como la
         // curvan los planetas y el sol.
-        if (ship.gravityEnabled && !ship.surfaceMode) {
+        if (showTrajectory && ship.gravityEnabled && !ship.surfaceMode) {
             Ship ghost = ship;
             std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
             for (int i = 1; i <= 30; ++i) {
@@ -461,9 +495,10 @@ int main(int argc, char* argv[]) {
             drawText(fb, sx - textWidth(label) / 2, sy, label, 0xFFD8E0F0);
         }
 
-        // La estela se dibuja despues de toda la escena 3D (usa su profundidad
-        // para que los planetas la tapen) y antes del HUD.
-        trail.draw(fb, u);
+        // Las particulas (estela y explosiones) se dibujan despues de toda la
+        // escena 3D (usan su profundidad para que los planetas las tapen) y
+        // antes del HUD.
+        particles.draw(fb, u);
 
         // HUD con texto: navegacion, contadores del renderizador y ayuda.
         float speed = length(ship.velocity);
@@ -486,6 +521,9 @@ int main(int argc, char* argv[]) {
         hud.gravity = ship.gravityEnabled;
         hud.relief = scene.deformTerrain;
         hud.normalMapping = u.normalMapping;
+        hud.asteroids = belt.total();
+        hud.asteroidsFlying = belt.flying();
+        hud.explosions = belt.explosions();
         hud.opt = opt;
         hud.stats = stats;
         hud.seed = scene.propSeed;

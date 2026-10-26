@@ -48,7 +48,7 @@ void drawHud(Framebuffer& fb, const HudInfo& info) {
 
     // --- Panel del renderizador (arriba a la derecha) ---
     const int panelW = 250, px = W - panelW - 8;
-    darkenRect(fb, px, 8, panelW, 102, 0.55f);
+    darkenRect(fb, px, 8, panelW, 124, 0.55f);
     std::snprintf(line, sizeof(line), "FPS %.0f   CUADRO %.1f MS", info.fps, info.frameMs);
     drawText(fb, px + 8, 14, line, info.fps >= 30 ? GREEN : ORANGE);
     std::snprintf(line, sizeof(line), "TRIANGULOS %d", info.stats.trianglesIn);
@@ -65,6 +65,10 @@ void drawHud(Framebuffer& fb, const HudInfo& info) {
     drawText(fb, px + 8, 80, line, CYAN);
     std::snprintf(line, sizeof(line), "MAPA DE NORMALES %s", yesNo(info.normalMapping));
     drawText(fb, px + 8, 90, line, CYAN);
+    std::snprintf(line, sizeof(line), "ASTEROIDES %d  GOLPEADOS %d", info.asteroids, info.asteroidsFlying);
+    drawText(fb, px + 8, 104, line, ORANGE);
+    std::snprintf(line, sizeof(line), "EXPLOSIONES %d", info.explosions);
+    drawText(fb, px + 8, 114, line, ORANGE);
 
     // --- Barras de velocidad y boost (abajo a la izquierda) ---
     drawText(fb, 16, H - 36, "VEL", GREY);
@@ -85,7 +89,8 @@ void drawHud(Framebuffer& fb, const HudInfo& info) {
             "SHIFT      BOOST",
             "ESPACIO    FRENO FUERTE",
             "RATON DER. MIRAR   RUEDA  ZOOM",
-            "F  MODO SUPERFICIE   V  GRAVEDAD   T  ORBITAS",
+            "F  MODO SUPERFICIE   V  GRAVEDAD",
+            "T  ORBITAS   Y  TRAYECTORIA",
             "G  RELIEVE   N  NUEVA SEMILLA   M  NORMALES",
             "O  DESCARTE  L  LOD  B  CARAS TRASERAS",
             "R  REINICIAR  P  CAPTURA  ESC  SALIR",

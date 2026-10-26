@@ -26,6 +26,7 @@ struct HudInfo {
     float altitude = 0;
     bool surfaceMode = false, surfaceEnabled = true;
     bool gravity = true, relief = true, normalMapping = true;
+    int asteroids = 0, asteroidsFlying = 0, explosions = 0;
     Optimizations opt;
     RenderStats stats;
     unsigned seed = 0;
