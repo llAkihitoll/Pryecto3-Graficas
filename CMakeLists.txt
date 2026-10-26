@@ -38,6 +38,7 @@ add_executable(galaxia
     src/scene.cpp
     src/shaders.cpp
     src/ship.cpp
+    src/skybox.cpp
     src/texture.cpp
 )
 
