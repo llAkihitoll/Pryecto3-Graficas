@@ -114,6 +114,7 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `--flat` | Duna sin deformar (esfera), para comparar |
 | `--test-impact` | Lanza un asteroide hacia Duna (para ver la explosión) |
 | `--test-hit` | Pone un asteroide quieto delante del carro (para chocarlo) |
+| `--near-dist D` | Con `--near`: empieza a D unidades del planeta, apuntando a donde estará (para probar choques en picada) |
 | `--no-opt` | Sin descarte de objetos ni LOD, para comparar contadores |
 | `--no-normal-map` | El carro sin mapas de normales, para comparar |
 | `--time S` | Adelanta la simulación S segundos |
@@ -148,7 +149,7 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `L` | Activar o desactivar el nivel de detalle automático |
 | `B` | Activar o desactivar el descarte de caras traseras |
 | `H` | Mostrar u ocultar la ayuda de controles |
-| `R` | Volver al punto de inicio |
+| `R` | Volver al punto de inicio (también reaparece al instante si el carro explotó) |
 | `P` | Guardar una captura en `captura.png` |
 | `Esc` | Salir |
 
@@ -275,6 +276,19 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `asteroidShader` | Asteroides | Lambert con luz del sol, luz ambiente y un borde tenue para distinguirlos del fondo |
 | `flameShader` | Llama del boost | Emisiva. **Núcleo caliente** donde se mira a través de más fuego (centro de la silueta o a lo largo del eje), naranja en los bordes y rojo en la punta; pulsos que viajan hacia atrás con el tiempo |
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
+
+### Choques del carro ([ship.cpp](src/ship.cpp))
+
+- **Tocar el sol** destruye el carro siempre.
+- **Contra un planeta**, explota si el impacto (la parte de la velocidad que va hacia el planeta)
+  supera **20 u/s**; más despacio rebota.
+- **Aterrizar o estrellarse:** si el carro cruza la zona del modo superficie bajando a más de
+  **28 u/s** (en picada), el modo superficie no lo atrapa y puede estrellarse; si llega con calma lo
+  atrapa como siempre. El freno automático cerca de los planetas solo actúa en modo superficie, así
+  que en vuelo libre se puede ir a fondo hacia un planeta.
+- **Al explotar:** fogonazo y bola de fuego de partículas, el carro desaparece, la cámara se aleja y
+  se queda mirando la explosión, y en pantalla aparece "EL CARRO EXPLOTÓ". A los 3 s (o con `R`)
+  reaparece en el punto de inicio.
 
 ### Cinturón de asteroides ([asteroids.cpp](src/asteroids.cpp))
 
