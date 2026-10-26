@@ -172,6 +172,7 @@ void Scene::build(unsigned seed) {
     dune.spinPeriod = 40.0f;
     dune.axialTilt = radians(15.0f);
     dune.surfaceGravity = 10.0f;
+    dune.orbitColor = {0.95f, 0.6f, 0.3f};
     bodies.push_back(std::move(dune));
 
     // Las fases iniciales estan elegidas para que, desde donde arranca el
@@ -187,6 +188,7 @@ void Scene::build(unsigned seed) {
     glacia.spinPeriod = 50.0f;
     glacia.axialTilt = radians(-25.0f);
     glacia.surfaceGravity = 7.0f;
+    glacia.orbitColor = {0.55f, 0.85f, 1.0f};
     bodies.push_back(std::move(glacia));
 
     CelestialBody vergel;
@@ -200,6 +202,7 @@ void Scene::build(unsigned seed) {
     vergel.spinPeriod = 70.0f;
     vergel.axialTilt = radians(10.0f);
     vergel.surfaceGravity = 12.0f;
+    vergel.orbitColor = {0.4f, 0.9f, 0.45f};
     vergel.cloudPeriod = 150.0f;
     bodies.push_back(std::move(vergel));
 
@@ -214,6 +217,7 @@ void Scene::build(unsigned seed) {
     aurelia.spinPeriod = 90.0f;
     aurelia.axialTilt = radians(20.0f);
     aurelia.surfaceGravity = 14.0f;
+    aurelia.orbitColor = {0.95f, 0.8f, 0.55f};
     // Tres anillos con huecos entre ellos (los huecos son geometria real).
     aurelia.ring.materials = {Material{"Anillo interior", {0.70f, 0.62f, 0.50f}},
                               Material{"Anillo medio", {0.90f, 0.82f, 0.68f}},
@@ -235,6 +239,7 @@ void Scene::build(unsigned seed) {
     ignis.spinPeriod = 35.0f;
     ignis.axialTilt = radians(5.0f);
     ignis.surfaceGravity = 9.0f;
+    ignis.orbitColor = {1.0f, 0.35f, 0.1f};
     bodies.push_back(std::move(ignis));
 
     // Hornear las superficies de todos los cuerpos al mismo tiempo (cada
@@ -290,6 +295,23 @@ void Scene::drawStars(Framebuffer& fb, const Uniforms& u) const {
             fb.setPixel(x - 1, y, dim);
             fb.setPixel(x, y + 1, dim);
             fb.setPixel(x, y - 1, dim);
+        }
+    }
+}
+
+void Scene::drawOrbits(Framebuffer& fb, const Uniforms& u) const {
+    // La orbita es el mismo circulo que recorre position(): radio orbitRadius
+    // en el plano XZ, alrededor del sol (que esta en el origen). Se dibuja
+    // como puntos repartidos sobre el circulo, mas apagados que el planeta.
+    const int DOTS = 512;
+    for (const CelestialBody& b : bodies) {
+        if (b.orbitPeriod <= 0.0f) continue; // el sol no orbita
+        Vec3 c = b.orbitColor * 0.6f;
+        uint32_t argb = 0xFF000000u | ((uint32_t)(c.x * 255) << 16) | ((uint32_t)(c.y * 255) << 8) | (uint32_t)(c.z * 255);
+        for (int i = 0; i < DOTS; ++i) {
+            float a = 2.0f * PI * i / DOTS;
+            Vec3 p{b.orbitRadius * std::sin(a), 0.0f, b.orbitRadius * std::cos(a)};
+            drawPoint3D(fb, u, p, argb, 2);
         }
     }
 }

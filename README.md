@@ -4,7 +4,7 @@ Un pequeño sistema solar que se explora manejando el **Fennec de Rocket League*
 espacial. Todo se dibuja con un **renderizador por software propio** escrito en C++: SDL2 solo
 abre la ventana, lee el teclado y muestra el framebuffer que calcula el programa.
 
-![Vista inicial con los tres planetas y el HUD](docs/capturas/01_inicio.png)
+![Vista inicial con los planetas, sus órbitas y el HUD](docs/capturas/01_inicio.png)
 
 El sistema tiene un sol animado y cinco planetas con identidad propia que orbitan y giran según el
 tiempo transcurrido:
@@ -25,7 +25,8 @@ sin pantallas de carga ni cambios de escena.
 | ![Duna](docs/capturas/02_duna.png) | ![Glacia](docs/capturas/03_glacia.png) |
 | ![Vergel](docs/capturas/04_vergel.png) | ![Sol animado](docs/capturas/05_sol.png) |
 | ![Aurelia y sus anillos](docs/capturas/08_aurelia.png) | ![Ignis](docs/capturas/09_ignis.png) |
-| ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) | ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) |
+| ![Vista general: el sol y las órbitas de los cinco planetas](docs/capturas/11_orbitas.png) | ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) |
+| ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | |
 
 ---
 
@@ -131,6 +132,7 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | Rueda del ratón | Acercar o alejar la cámara del carro |
 | `F` | Activar o desactivar el modo superficie |
 | `V` | Activar o desactivar la gravedad |
+| `T` | Mostrar u ocultar las líneas de las órbitas de los planetas |
 | `G` | Duna deformada o como esfera lisa |
 | `M` | Activar o desactivar los mapas de normales del carro |
 | `N` | Nueva semilla para los objetos de superficie |

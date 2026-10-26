@@ -28,6 +28,7 @@ struct CelestialBody {
     float axialTilt = 0.0f;   // inclinacion del eje de rotacion (radianes)
     float cloudPeriod = 0.0f; // segundos para que las nubes den una vuelta (0 = sin nubes)
     float surfaceGravity = 0.0f; // atraccion en la superficie (unidades/s^2)
+    Vec3 orbitColor{0.5f, 0.5f, 0.5f}; // color de la linea de su orbita
 
     // Objetos sobre la superficie, ya unidos en una sola malla en el espacio
     // local del planeta (sin escala). Solo se dibujan cuando el planeta esta cerca.
@@ -83,4 +84,8 @@ struct Scene {
     // rotacion de la vista (sin traslacion) y la proyeccion.
     void drawStars(Framebuffer& fb, const Uniforms& u) const;
     void drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Optimizations& opt) const;
+
+    // Trayectoria de cada planeta alrededor del sol: un circulo punteado del
+    // color del planeta, con prueba de profundidad (lo tapan los cuerpos).
+    void drawOrbits(Framebuffer& fb, const Uniforms& u) const;
 };

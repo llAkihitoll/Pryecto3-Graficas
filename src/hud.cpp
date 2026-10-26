@@ -85,7 +85,7 @@ void drawHud(Framebuffer& fb, const HudInfo& info) {
             "SHIFT      BOOST",
             "ESPACIO    FRENO FUERTE",
             "RATON DER. MIRAR   RUEDA  ZOOM",
-            "F  MODO SUPERFICIE   V  GRAVEDAD",
+            "F  MODO SUPERFICIE   V  GRAVEDAD   T  ORBITAS",
             "G  RELIEVE   N  NUEVA SEMILLA   M  NORMALES",
             "O  DESCARTE  L  LOD  B  CARAS TRASERAS",
             "R  REINICIAR  P  CAPTURA  ESC  SALIR",

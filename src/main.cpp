@@ -185,6 +185,7 @@ int main(int argc, char* argv[]) {
     unsigned propSeed = 2026;
     bool flatTerrain = false;
     bool showHelp = true;
+    bool showOrbits = true; // tecla T: lineas de las orbitas de los planetas
     bool noNormalMap = false;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
@@ -362,6 +363,7 @@ int main(int argc, char* argv[]) {
                     case SDLK_o: opt.cullObjects = !opt.cullObjects; break;
                     case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
                     case SDLK_v: ship.gravityEnabled = !ship.gravityEnabled; break;
+                    case SDLK_t: showOrbits = !showOrbits; break;
                     case SDLK_m: u.normalMapping = !u.normalMapping; break;
                     case SDLK_h:
                         showHelp = !showHelp;
@@ -405,6 +407,7 @@ int main(int argc, char* argv[]) {
         stats.reset();
         scene.drawStars(fb, u);
         scene.drawBodies(fb, u, stats, opt);
+        if (showOrbits) scene.drawOrbits(fb, u);
 
         // El carro tambien pasa por el descarte y el nivel de detalle: si
         // se ve pequeno (camara lejos) basta con el modelo reducido.
