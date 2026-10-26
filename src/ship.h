@@ -12,6 +12,7 @@ struct SphereCollider {
     float surfaceGravity = 0.0f; // aceleracion de la gravedad en su superficie (unidades/s^2)
     float surfaceZone = 0.0f;    // altitud donde se activa el modo superficie (0 = no tiene)
     float gravityRange = 0.0f;   // distancia al centro donde la gravedad ya no actua (0 = sin limite)
+    bool deadly = false;         // tocarlo destruye el carro (el sol)
 
     // Si el planeta esta deformado: su forma (en el espacio local del
     // planeta) y el giro inverso para pasar una direccion del mundo a ese espacio.
@@ -67,6 +68,10 @@ struct ShipTuning {
     float climbPerAltitude = 0.6f; // mas alto sube mas rapido, para salir de la zona sin tardar
     float alignRate = 3.5f;        // que tan rapido el carro se endereza con el planeta
 
+    // Choques
+    float crashSpeed = 20.0f;      // chocar con un planeta mas rapido que esto destruye el carro
+    float captureSpeed = 28.0f;    // bajando en picada mas rapido que esto, el modo superficie no atrapa
+
     // Gravedad
     float gravityDrag = 0.12f;     // perdida lenta de la deriva por gravedad (por segundo)
     float gravitySurfaceDecay = 3.0f; // en modo superficie la deriva se apaga rapido
@@ -96,6 +101,13 @@ struct Ship {
     // su vertical y vuela paralelo al suelo, asi avanzar derecho le da la
     // vuelta al planeta. surfaceEnabled se cambia con la tecla F.
     bool surfaceEnabled = true;
+    bool diving = false;  // entro a la zona en picada: el modo superficie no lo atrapa
+
+    // Explosion: se activa al tocar el sol o chocar rapido con un planeta. El
+    // carro se queda quieto (main.cpp lo hace reaparecer).
+    bool crashed = false;
+    int crashBody = -1;   // indice del cuerpo con el que choco
+    Vec3 crashPoint;      // punto de la superficie donde choco
 
     // Gravedad: deriva que acumulan las atracciones de los cuerpos. Va aparte
     // de "velocity" porque el agarre alinearia esa velocidad con el frente

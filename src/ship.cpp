@@ -17,12 +17,14 @@ static float smoothstep(float a, float b, float x) {
 static float approach(float rate, float h) { return 1.0f - std::exp(-rate * h); }
 
 void Ship::update(const ShipInput& input, float dt, const std::vector<SphereCollider>& bodies) {
+    if (crashed) return; // destruido: ya no se mueve
     accumulator += dt;
     // La tolerancia evita perder un paso por redondeo (0.05 - 6 * 1/120
     // en float puede quedar apenas por debajo de cero).
     while (accumulator >= FIXED_STEP - 1e-6f) {
         step(input, FIXED_STEP, bodies);
         accumulator -= FIXED_STEP;
+        if (crashed) break;
     }
 }
 
@@ -81,8 +83,17 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
     // Modo de superficie: solo ya cerca del suelo (si no se apago con F).
     // Su zona es mas chica que la de frenado: pasar cerca de un planeta no
     // atrapa al carro, solo lo frena un poco.
+    // Si entra a la zona en picada (muy rapido hacia el planeta), el modo
+    // superficie no lo salva: sigue en vuelo libre y puede estrellarse.
     bool wasSurface = surfaceMode;
-    surfaceMode = surfaceEnabled && nearest >= 0 && altitude < bodies[nearest].surfaceZone;
+    bool inZone = surfaceEnabled && nearest >= 0 && altitude < bodies[nearest].surfaceZone;
+    if (inZone && !wasSurface && !diving) {
+        Vec3 vertical = normalize(position - bodies[nearest].center);
+        float dive = -dot(velocity + gravityVelocity, vertical);
+        if (dive > t.captureSpeed) diving = true;
+    }
+    if (!inZone) diving = false;
+    surfaceMode = inZone && !diving;
     Vec3 n; // vertical del planeta en la posicion del carro
     if (surfaceMode) {
         n = normalize(position - bodies[nearest].center);
@@ -115,9 +126,12 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
 
     // Limite de velocidad actual. Cerca de un planeta baja para que se pueda
     // maniobrar y rodearlo sin pasarse.
+    // El freno cerca del planeta solo actua en modo superficie: en vuelo libre
+    // se puede ir a fondo hacia un planeta (y estrellarse).
+    float brake = surfaceMode ? closeness : 0.0f;
     float limitFar = boosting ? t.maxBoostSpeed : t.maxSpeed;
     float limitNear = boosting ? t.nearBoostSpeed : t.nearSpeed;
-    float limit = limitFar + (limitNear - limitFar) * closeness;
+    float limit = limitFar + (limitNear - limitFar) * brake;
 
     // --- Aceleracion, freno y reversa ---
     // El empuje solo acelera mientras no se haya llegado al limite.
@@ -149,8 +163,8 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
         // El boost acelera hasta su limite y ahi se queda. Si el limite bajo
         // (se acabo el boost o se entro a la zona del planeta) se frena poco
         // a poco en vez de golpe.
-        bool boostCap = boosting && closeness == 0.0f;
-        float decel = closeness > 0.0f ? t.approachDeceleration : t.limitDeceleration;
+        bool boostCap = boosting && brake == 0.0f;
+        float decel = brake > 0.0f ? t.approachDeceleration : t.limitDeceleration;
         float target = boostCap ? limit : std::max(limit, len - decel * h);
         velocity = velocity * (target / len);
     }
@@ -228,13 +242,24 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
 // cuerpo, se empuja a la superficie y se quita (y rebota un poco) la parte
 // de la velocidad que iba hacia adentro.
 void Ship::collide(const std::vector<SphereCollider>& bodies) {
-    for (const SphereCollider& b : bodies) {
+    for (size_t i = 0; i < bodies.size(); ++i) {
+        const SphereCollider& b = bodies[i];
         Vec3 d = position - b.center;
         float dist = length(d);
         float minDist = b.surfaceRadius(position) + tuning.collisionRadius;
         if (dist >= minDist) continue;
 
         Vec3 n = dist > 1e-4f ? d * (1.0f / dist) : Vec3{0, 1, 0};
+        // Velocidad del impacto: la parte de la velocidad que va hacia el
+        // cuerpo. Tocar el sol o chocar muy rapido destruye el carro.
+        float impact = -dot(velocity + gravityVelocity, n);
+        if (b.deadly || impact > tuning.crashSpeed) {
+            crashed = true;
+            crashBody = (int)i;
+            crashPoint = b.center + n * b.surfaceRadius(position);
+            velocity = gravityVelocity = Vec3{0, 0, 0};
+            return;
+        }
         position = b.center + n * minDist;
         float into = dot(velocity, n);
         if (into < 0) velocity -= n * (into * (1.0f + tuning.bounce));
