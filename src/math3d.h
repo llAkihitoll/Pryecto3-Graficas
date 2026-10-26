@@ -90,6 +90,17 @@ inline Mat4 translate(const Vec3& t) {
     return r;
 }
 
+// Rotacion de "angle" radianes alrededor de un eje unitario cualquiera
+// (formula de Rodrigues escrita como matriz). La usan los asteroides.
+inline Mat4 rotateAxis(const Vec3& k, float angle) {
+    float c = std::cos(angle), s = std::sin(angle), t = 1.0f - c;
+    Mat4 r = Mat4::identity();
+    r.m[0][0] = t * k.x * k.x + c;       r.m[0][1] = t * k.x * k.y - s * k.z; r.m[0][2] = t * k.x * k.z + s * k.y;
+    r.m[1][0] = t * k.x * k.y + s * k.z; r.m[1][1] = t * k.y * k.y + c;       r.m[1][2] = t * k.y * k.z - s * k.x;
+    r.m[2][0] = t * k.x * k.z - s * k.y; r.m[2][1] = t * k.y * k.z + s * k.x; r.m[2][2] = t * k.z * k.z + c;
+    return r;
+}
+
 // Escala distinta por eje (solo para la llama, que no usa la normal).
 inline Mat4 scale3(const Vec3& s) {
     Mat4 r = Mat4::identity();

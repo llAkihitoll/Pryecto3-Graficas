@@ -44,6 +44,7 @@ struct RenderStats {
     int objectsDrawn = 0;   // objetos que pasaron el descarte
     int objectsCulled = 0;  // objetos descartados por estar fuera de la vista
     int propsDrawn = 0;     // objetos de superficie (rocas, arboles...) dibujados
+    int asteroidsDrawn = 0; // asteroides dibujados como malla (los lejanos son puntos)
     int trianglesIn = 0;    // triangulos enviados
     int trianglesDrawn = 0; // triangulos que llegaron a rasterizarse
     long long pixelsShaded = 0;

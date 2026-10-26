@@ -219,6 +219,16 @@ Vec3 flameShader(const Fragment& f, const Uniforms& u) {
     return c * (pulse * (1.1f - 0.5f * t));
 }
 
+Vec3 asteroidShader(const Fragment& f, const Uniforms& u) {
+    Vec3 toLight = normalize(u.lightPos - f.worldPos);
+    Vec3 toCamera = normalize(u.cameraPos - f.worldPos);
+    Vec3 n = f.normal;
+    if (dot(n, toCamera) < 0) n = -n;
+    float diffuse = std::max(0.0f, dot(n, toLight));
+    float edge = 1.0f - std::max(0.0f, dot(n, toCamera));
+    return f.material->color * (0.07f + diffuse) + Vec3{0.25f, 0.22f, 0.2f} * (edge * edge * edge * 0.4f);
+}
+
 Vec3 propShader(const Fragment& f, const Uniforms& u) {
     const Material& m = *f.material;
     Vec3 toLight = normalize(u.lightPos - f.worldPos);

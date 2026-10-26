@@ -20,6 +20,7 @@ find_package(ZLIB REQUIRED)
 
 add_executable(galaxia
     src/main.cpp
+    src/asteroids.cpp
     src/boost_flame.cpp
     src/camera.cpp
     src/font.cpp
@@ -30,6 +31,7 @@ add_executable(galaxia
     src/noise.cpp
     src/obj_loader.cpp
     src/parallel.cpp
+    src/particles.cpp
     src/planets.cpp
     src/props.cpp
     src/renderer.cpp

@@ -47,6 +47,10 @@ Vec3 ignisShader(const Fragment& f, const Uniforms& u);
 // los bordes y rojo oscuro en la punta, con pulsos que viajan hacia atras.
 Vec3 flameShader(const Fragment& f, const Uniforms& u);
 
+// Asteroides: roca iluminada por el sol (Lambert) con un poco de luz
+// ambiente y un borde tenue para que se distingan contra el espacio negro.
+Vec3 asteroidShader(const Fragment& f, const Uniforms& u);
+
 // Objetos de superficie: Lambert + brillo con el color del material, luz
 // propia (cristales, la luz de la baliza) y sombra del planeta: si el sol
 // esta debajo del horizonte del objeto, no lo ilumina.
