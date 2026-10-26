@@ -17,6 +17,11 @@ tiempo transcurrido:
 | **Aurelia** | Gigante gaseoso con bandas que giran a distinta velocidad, una gran tormenta y **anillos** | — (es de gas) |
 | **Ignis** | Planeta volcánico junto al sol, con ríos y lagos de **lava que brilla** | Rocas sobre el basalto |
 
+Las órbitas siguen la **tercera ley de Kepler** (el periodo crece con el radio a la 1.5): Ignis, el
+más cercano al sol, da una vuelta en ~35 s y Aurelia, el más lejano, en ~430 s. Entre Glacia y
+Vergel hay un **cinturón de asteroides**: el carro puede chocar las rocas, que salen disparadas y,
+si llegan a un planeta o al sol, **explotan**.
+
 El carro puede viajar entre ellos, acercarse, rodearlos en **modo superficie** y volver a alejarse
 sin pantallas de carga ni cambios de escena.
 
@@ -25,8 +30,8 @@ sin pantallas de carga ni cambios de escena.
 | ![Duna](docs/capturas/02_duna.png) | ![Glacia](docs/capturas/03_glacia.png) |
 | ![Vergel](docs/capturas/04_vergel.png) | ![Sol animado](docs/capturas/05_sol.png) |
 | ![Aurelia y sus anillos](docs/capturas/08_aurelia.png) | ![Ignis](docs/capturas/09_ignis.png) |
-| ![Vista general: el sol y las órbitas de los cinco planetas](docs/capturas/11_orbitas.png) | ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) |
-| ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | |
+| ![Vista general: el sol, las órbitas y el cinturón de asteroides](docs/capturas/11_orbitas.png) | ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) |
+| ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | ![Explosión de un asteroide al chocar con Duna](docs/capturas/12_explosion.png) |
 
 ---
 
@@ -107,6 +112,8 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `--near N` | Empieza frente al lado de día del cuerpo N (1 = Duna, 2 = Glacia, 3 = Vergel, 4 = Aurelia, 5 = Ignis) |
 | `--hide-help` | Empieza sin el panel de controles |
 | `--flat` | Duna sin deformar (esfera), para comparar |
+| `--test-impact` | Lanza un asteroide hacia Duna (para ver la explosión) |
+| `--test-hit` | Pone un asteroide quieto delante del carro (para chocarlo) |
 | `--no-opt` | Sin descarte de objetos ni LOD, para comparar contadores |
 | `--no-normal-map` | El carro sin mapas de normales, para comparar |
 | `--time S` | Adelanta la simulación S segundos |
@@ -133,6 +140,7 @@ Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los p
 | `F` | Activar o desactivar el modo superficie |
 | `V` | Activar o desactivar la gravedad |
 | `T` | Mostrar u ocultar las líneas de las órbitas de los planetas |
+| `Y` | Mostrar u ocultar los puntos de la trayectoria prevista del carro |
 | `G` | Duna deformada o como esfera lisa |
 | `M` | Activar o desactivar los mapas de normales del carro |
 | `N` | Nueva semilla para los objetos de superficie |
@@ -180,7 +188,8 @@ Duración sugerida: unos 2 minutos. Todo ocurre en la misma escena.
 | 1:35–1:50 | Mantener `↑` hasta salir del modo superficie y luego `Shift` | **Alejamiento**: el planeta vuelve a verse como un cuerpo del sistema |
 | 1:50–2:00 | Pulsar `O` y `L` mirando los contadores | El descarte de objetos y el LOD cambian el trabajo del renderizador |
 
-Opcional: visitar los demás planetas. En Glacia las grietas brillan más en el lado de noche, en
+Opcional: pasar por el cinturón de asteroides (entre Glacia y Vergel) y chocar rocas con boost
+hacia un planeta para ver la explosión. Visitar los demás planetas. En Glacia las grietas brillan más en el lado de noche, en
 Vergel se mueven las nubes, en Aurelia las bandas se deslizan entre sí y la sombra del planeta cruza
 los anillos, y en Ignis la lava late con pulsos de calor.
 
@@ -212,7 +221,9 @@ src/
   ship.*              Física del carro: control, modo superficie, gravedad, colisión
   camera.*            Cámara de persecución
   hud.*, font.*       HUD y fuente propia de 5x7 píxeles
-  boost_flame.*       Llama de cohete del boost (escapes del Fennec) y estela de partículas
+  boost_flame.*       Llama de cohete del boost (escapes del Fennec)
+  particles.*         Partículas de fuego y humo (estela del boost y explosiones)
+  asteroids.*         Cinturón de asteroides: órbitas, choques con el carro y explosiones
   mesh_builder.h      Ayudante para construir modelos en código con caras planas
 ```
 
@@ -261,8 +272,22 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `ringShader` | Anillos | Vetas finas según la distancia al centro, luz por las dos caras y **sombra del planeta** (rayo hacia el sol contra su esfera) |
 | `ignisShader` | Volcánico | Roca con relieve y lava emisiva con pulsos de calor que avanzan con el tiempo |
 | `carShader` | Carro | Blinn-Phong con los materiales del modelo, **mapeo de normales en espacio tangente** (chasis, rines y llantas), borde Fresnel y faros emisivos |
+| `asteroidShader` | Asteroides | Lambert con luz del sol, luz ambiente y un borde tenue para distinguirlos del fondo |
 | `flameShader` | Llama del boost | Emisiva. **Núcleo caliente** donde se mira a través de más fuego (centro de la silueta o a lo largo del eje), naranja en los bordes y rojo en la punta; pulsos que viajan hacia atrás con el tiempo |
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
+
+### Cinturón de asteroides ([asteroids.cpp](src/asteroids.cpp))
+
+- **220 rocas** repartidas con una semilla fija entre los radios 262 y 302, cada una con su órbita
+  (Kepler, igual que los planetas), una altura sobre el plano y un giro propio alrededor de un eje
+  al azar (matriz de rotación de Rodrigues).
+- **Choque con el carro:** esfera contra esfera. La roca sale con la velocidad con que el carro se
+  le acercaba (multiplicada, porque es más liviana) y el carro pierde parte de la suya.
+- **Vuelo libre:** la roca golpeada siente la misma gravedad que el carro. Si choca con un planeta o
+  con el sol, explota: un fogonazo y una ráfaga de partículas de fuego y humo en el punto de impacto,
+  que se mueven junto con el planeta. A los 8 s la roca reaparece en el cinturón.
+- **Dibujo eficiente:** las rocas visibles se juntan en una sola malla por cuadro; las que no se ven
+  se descartan y las muy lejanas se dibujan como un punto.
 
 ### Boost: llama de cohete y estela ([boost_flame.cpp](src/boost_flame.cpp))
 
@@ -345,6 +370,7 @@ altura del terreno) que gira con el planeta.
 
 - El modelo del carro no es de autoría propia (ver *Recursos externos*).
 - Los objetos de superficie y los anillos de Aurelia no tienen colisión (el carro los puede atravesar).
+- Los asteroides no chocan entre sí y las explosiones no dejan cráteres en los planetas.
 - No hay sombras proyectadas entre objetos; solo la sombra del planeta sobre sus objetos.
 - La gravedad del sol es suave a propósito, para que el carro detenido no se vaya cayendo.
 - Solo se probó en Windows 11 con MSYS2 UCRT64. El código no depende de Windows salvo la copia de
