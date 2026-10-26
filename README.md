@@ -22,6 +22,9 @@ más cercano al sol, da una vuelta en ~35 s y Aurelia, el más lejano, en ~430 s
 Vergel hay un **cinturón de asteroides**: el carro puede chocar las rocas, que salen disparadas y,
 si llegan a un planeta o al sol, **explotan**.
 
+De fondo hay un universo generado por procedimiento: la **Vía Láctea**, **nebulosas** de colores,
+**galaxias espirales** lejanas y 5000 estrellas de distintos colores.
+
 El carro puede viajar entre ellos, acercarse, rodearlos en **modo superficie** y volver a alejarse
 sin pantallas de carga ni cambios de escena.
 
@@ -32,6 +35,7 @@ sin pantallas de carga ni cambios de escena.
 | ![Aurelia y sus anillos](docs/capturas/08_aurelia.png) | ![Ignis](docs/capturas/09_ignis.png) |
 | ![Vista general: el sol, las órbitas y el cinturón de asteroides](docs/capturas/11_orbitas.png) | ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) |
 | ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | ![Explosión de un asteroide al chocar con Duna](docs/capturas/12_explosion.png) |
+| ![Fondo: nebulosa, Vía Láctea y una galaxia espiral](docs/capturas/13_universo.png) | |
 
 ---
 
@@ -102,7 +106,7 @@ Probado en **Windows 11** con **MSYS2 UCRT64**.
    También se puede abrir `build/galaxia.exe` con doble clic o desde PowerShell, sin tener MSYS2 en
    el PATH.
 
-Al arrancar tarda unos **3 segundos** en generar las superficies del sol y los planetas.
+Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los planetas y el fondo.
 
 ### Opciones de línea de comandos (para pruebas)
 
@@ -222,6 +226,7 @@ src/
   ship.*              Física del carro: control, modo superficie, gravedad, colisión
   camera.*            Cámara de persecución
   hud.*, font.*       HUD y fuente propia de 5x7 píxeles
+  skybox.*            Fondo del universo: Vía Láctea, nebulosas y galaxias (cubemap horneado)
   boost_flame.*       Llama de cohete del boost (escapes del Fennec)
   particles.*         Partículas de fuego y humo (estela del boost y explosiones)
   asteroids.*         Cinturón de asteroides: órbitas, choques con el carro y explosiones
@@ -276,6 +281,21 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `asteroidShader` | Asteroides | Lambert con luz del sol, luz ambiente y un borde tenue para distinguirlos del fondo |
 | `flameShader` | Llama del boost | Emisiva. **Núcleo caliente** donde se mira a través de más fuego (centro de la silueta o a lo largo del eje), naranja en los bordes y rojo en la punta; pulsos que viajan hacia atrás con el tiempo |
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
+
+### Fondo del universo ([skybox.cpp](src/skybox.cpp))
+
+- Al arrancar se hornea un cubemap de 512×512 por cara con:
+  - **Vía Láctea:** una franja alrededor de un gran círculo del cielo, con grumos de estrellas (fbm)
+    y canales de polvo oscuro (donde el ruido cruza cero).
+  - **Nebulosas:** tres nubes de gas de colores hechas con ruido fractal deformado con otro ruido.
+  - **Galaxias espirales:** seis, con núcleo y dos brazos en espiral logarítmica, cada una con su
+    inclinación y orientación.
+  - **Polvo de estrellas** tenue (ruido celular).
+- Para dibujarlo, a cada píxel se le calcula la dirección en que mira la cámara (deshaciendo la
+  proyección y la rotación de la vista) y se lee el cubemap; se reparte en franjas entre los hilos.
+  Como solo depende de la dirección, el fondo se ve infinitamente lejos.
+- Encima van **5000 estrellas nítidas** como puntos, con colores según su temperatura (azules,
+  blancas, amarillas y anaranjadas), sumadas al fondo; las más brillantes con destello en cruz.
 
 ### Choques del carro ([ship.cpp](src/ship.cpp))
 
