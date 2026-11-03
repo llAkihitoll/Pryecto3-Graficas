@@ -13,6 +13,8 @@ struct SphereCollider {
     float surfaceZone = 0.0f;    // altitud donde se activa el modo superficie (0 = no tiene)
     float gravityRange = 0.0f;   // distancia al centro donde la gravedad ya no actua (0 = sin limite)
     bool deadly = false;         // tocarlo destruye el carro (el sol)
+    bool solid = true;           // false = se puede atravesar (agujero negro: solo atrae)
+    float cruiseAltitude = 0.0f; // altitud de crucero propia en modo superficie (0 = la del ajuste)
 
     // Si el planeta esta deformado: su forma (en el espacio local del
     // planeta) y el giro inverso para pasar una direccion del mundo a ese espacio.

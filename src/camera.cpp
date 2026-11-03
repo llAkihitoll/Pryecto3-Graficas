@@ -62,6 +62,7 @@ void ChaseCamera::snapTo(const Ship& ship) {
 
 void ChaseCamera::keepOutside(const std::vector<SphereCollider>& bodies, float margin) {
     for (const SphereCollider& b : bodies) {
+        if (!b.solid) continue;
         Vec3 d = eye - b.center;
         float dist = length(d);
         float minDist = b.radius + margin;
