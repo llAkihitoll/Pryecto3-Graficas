@@ -4,6 +4,7 @@
 #include <random>
 #include <thread>
 #include <utility>
+#include "blackhole.h"
 #include "geometry.h"
 #include "shaders.h"
 
@@ -42,7 +43,7 @@ int CelestialBody::chooseLod(float screenRadius) const {
 }
 
 Vec3 CelestialBody::position(float time) const {
-    if (orbitPeriod <= 0.0f) return Vec3{0, 0, 0};
+    if (orbitPeriod <= 0.0f) return fixedPosition;
     float angle = orbitPhase + 2.0f * PI * time / orbitPeriod;
     return Vec3{orbitRadius * std::sin(angle), 0.0f, orbitRadius * std::cos(angle)};
 }
@@ -140,7 +141,7 @@ void Scene::buildProps(unsigned seed) {
     const std::vector<PropInstance>* lists[] = {nullptr, &dune, &glacia, &vergel, nullptr, &ignis};
     const float heights[] = {0.0f, 3.6f, 2.0f, 2.7f, 0.0f, 1.0f}; // altura maxima de cada planeta (modelo * escala)
     std::printf("Objetos de superficie (semilla %u):", seed);
-    for (int i = 1; i < (int)bodies.size(); ++i) {
+    for (int i = 1; i < 6 && i < (int)bodies.size(); ++i) {
         if (!lists[i]) continue; // Aurelia es de gas: no tiene objetos encima
         // Los objetos se apoyan en la altura real del terreno si esta deformado.
         bodies[i].props = mergeProps(*lists[i], bodies[i].radius, deformTerrain ? bodies[i].shape : nullptr);
@@ -243,6 +244,11 @@ void Scene::build(unsigned seed) {
     ignis.orbitColor = {1.0f, 0.35f, 0.1f};
     bodies.push_back(std::move(ignis));
 
+    // Agujero negro muy por encima del plano de las orbitas: cruzar su
+    // horizonte lleva al universo alterno.
+    bodies.push_back(makeBlackHole("Agujero negro", Vec3{0.0f, 650.0f, 0.0f}, 14.0f, Vec3{1.0f, 0.5f, 0.15f}));
+    blackHoleIndex = (int)bodies.size() - 1;
+
     // Hornear las superficies de todos los cuerpos al mismo tiempo (cada
     // horneado ademas reparte sus 6 caras en hilos). Los cuerpos ya estan
     // todos en el vector, asi que no se mueven de memoria mientras tanto.
@@ -262,11 +268,16 @@ void Scene::build(unsigned seed) {
     beaconModel = makeBeacon();
     buildProps(seed);
 
+    makeStars(STAR_SEED, STAR_COUNT);
+}
+
+void Scene::makeStars(unsigned seed, int count) {
     // Direcciones uniformes sobre la esfera: z uniforme en [-1, 1] y un
     // angulo uniforme alrededor. La semilla fija da siempre el mismo cielo.
-    std::mt19937 rng(STAR_SEED);
+    stars.clear();
+    std::mt19937 rng(seed);
     std::uniform_real_distribution<float> unit(0.0f, 1.0f);
-    for (int i = 0; i < STAR_COUNT; ++i) {
+    for (int i = 0; i < count; ++i) {
         float z = unit(rng) * 2.0f - 1.0f;
         float a = unit(rng) * 2.0f * PI;
         float r = std::sqrt(1.0f - z * z);
@@ -332,8 +343,15 @@ void Scene::drawOrbits(Framebuffer& fb, const Uniforms& u) const {
     }
 }
 
+void Scene::drawBlackHoles(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Optimizations& opt) const {
+    for (const CelestialBody& body : bodies) {
+        if (body.blackHole) drawBlackHole(fb, u, stats, body, opt.cullObjects);
+    }
+}
+
 void Scene::drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Optimizations& opt) const {
     for (const CelestialBody& body : bodies) {
+        if (body.blackHole) continue; // va en drawBlackHoles
         Vec3 center = body.position(u.time);
 
         // Descarte: si la esfera del cuerpo no toca el volumen de vision,

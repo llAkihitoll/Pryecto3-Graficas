@@ -30,6 +30,11 @@ struct CelestialBody {
     float cloudPeriod = 0.0f; // segundos para que las nubes den una vuelta (0 = sin nubes)
     float surfaceGravity = 0.0f; // atraccion en la superficie (unidades/s^2)
     Vec3 orbitColor{0.5f, 0.5f, 0.5f}; // color de la linea de su orbita
+    Vec3 fixedPosition;        // donde esta si no orbita (el sol en el origen, el agujero negro arriba)
+    float cruiseAltitude = 0.0f; // altitud de crucero propia en modo superficie (0 = la normal)
+    // Agujero negro: no se puede tocar (se atraviesa) y cruzar su horizonte
+    // lleva al otro universo. Se dibuja aparte, con la lente gravitacional.
+    bool blackHole = false;
 
     // Objetos sobre la superficie, ya unidos en una sola malla en el espacio
     // local del planeta (sin escala). Solo se dibujan cuando el planeta esta cerca.
@@ -69,6 +74,10 @@ struct Star {
 const float KEPLER_K = 0.045f;
 inline float keplerPeriod(float orbitRadius) { return KEPLER_K * std::pow(orbitRadius, 1.5f); }
 
+// Indices de los planetas con minijuego en el universo alterno.
+const int ALT_ARENA = 1;   // futbol estilo Rocket League
+const int ALT_COBALT = 2;  // carrera de anillos
+
 struct Scene {
     std::vector<CelestialBody> bodies;
     std::vector<Star> stars;
@@ -80,8 +89,25 @@ struct Scene {
     unsigned propSeed = 0;
     bool deformTerrain = true; // tecla G: ver Duna deformada o como esfera
 
+    // Donde aparece el carro al empezar (o al reaparecer) y a que cuerpo mira,
+    // y donde sale cuando llega a este universo por el agujero negro.
+    Vec3 spawnPoint;
+    int spawnLook = 1;
+    Vec3 arrivalPoint;
+    int blackHoleIndex = -1;
+    bool alternate = false; // es el universo alterno
+
     // Crea el sol, los planetas, las estrellas y los objetos de superficie.
     void build(unsigned propSeed);
+
+    // Universo alterno: estrella blanca, dos planetas con minijuego (Arena y
+    // Cobalto), otro cielo y un agujero negro para regresar (alternate.cpp).
+    void buildAlternate();
+
+    // Estrellas del fondo con esa semilla.
+    void makeStars(unsigned seed, int count);
+
+    const CelestialBody* blackHole() const { return blackHoleIndex >= 0 ? &bodies[blackHoleIndex] : nullptr; }
 
     // Vuelve a repartir los objetos de superficie con otra semilla (tecla N).
     void buildProps(unsigned seed);
@@ -93,6 +119,10 @@ struct Scene {
     // rotacion de la vista (sin traslacion) y la proyeccion.
     void drawStars(Framebuffer& fb, const Uniforms& u) const;
     void drawBodies(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Optimizations& opt) const;
+
+    // Agujeros negros: van despues de todo lo demas del fondo, porque su
+    // lente deforma lo que ya esta dibujado detras de ellos.
+    void drawBlackHoles(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Optimizations& opt) const;
 
     // Trayectoria de cada planeta alrededor del sol: un circulo punteado del
     // color del planeta, con prueba de profundidad (lo tapan los cuerpos).

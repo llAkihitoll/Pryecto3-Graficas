@@ -22,6 +22,19 @@ void darkenRect(Framebuffer& fb, int x, int y, int w, int h, float amount) {
         }
 }
 
+void tintScreen(Framebuffer& fb, const Vec3& color, float amount) {
+    uint32_t keep = (uint32_t)((1.0f - clampf(amount, 0.0f, 1.0f)) * 256.0f), add = 256 - keep;
+    uint32_t cr = (uint32_t)(color.x * 255.0f), cg = (uint32_t)(color.y * 255.0f), cb = (uint32_t)(color.z * 255.0f);
+    for (int y = 0; y < fb.height(); ++y)
+        for (int x = 0; x < fb.width(); ++x) {
+            uint32_t p = fb.getPixel(x, y);
+            uint32_t r = (((p >> 16) & 0xFF) * keep + cr * add) >> 8;
+            uint32_t g = (((p >> 8) & 0xFF) * keep + cg * add) >> 8;
+            uint32_t b = ((p & 0xFF) * keep + cb * add) >> 8;
+            fb.setPixel(x, y, 0xFF000000u | (r << 16) | (g << 8) | b);
+        }
+}
+
 void drawBar(Framebuffer& fb, int x, int y, int w, int h, float fraction, uint32_t argb) {
     fraction = std::min(1.0f, std::max(0.0f, fraction));
     fillRect(fb, x - 1, y - 1, w + 2, h + 2, 0xFF5A6478); // marco
@@ -45,6 +58,7 @@ void drawHud(Framebuffer& fb, const HudInfo& info) {
     else drawText(fb, 16, 34, info.surfaceEnabled ? "VUELO LIBRE" : "VUELO LIBRE (SUPERFICIE APAGADA)", GREY);
     std::snprintf(line, sizeof(line), "VELOCIDAD %.1f   BOOST %.0f%%", info.speed, info.boostFraction * 100.0f);
     drawText(fb, 16, 48, line, WHITE);
+    if (info.alternate) drawText(fb, 16, 70, "UNIVERSO ALTERNO", 0xFFFFD860);
 
     // --- Panel del renderizador (arriba a la derecha) ---
     const int panelW = 250, px = W - panelW - 8;
@@ -65,10 +79,12 @@ void drawHud(Framebuffer& fb, const HudInfo& info) {
     drawText(fb, px + 8, 80, line, CYAN);
     std::snprintf(line, sizeof(line), "MAPA DE NORMALES %s", yesNo(info.normalMapping));
     drawText(fb, px + 8, 90, line, CYAN);
-    std::snprintf(line, sizeof(line), "ASTEROIDES %d  GOLPEADOS %d", info.asteroids, info.asteroidsFlying);
-    drawText(fb, px + 8, 104, line, ORANGE);
-    std::snprintf(line, sizeof(line), "EXPLOSIONES %d", info.explosions);
-    drawText(fb, px + 8, 114, line, ORANGE);
+    if (!info.alternate) { // el cinturon de asteroides solo esta en el universo normal
+        std::snprintf(line, sizeof(line), "ASTEROIDES %d  GOLPEADOS %d", info.asteroids, info.asteroidsFlying);
+        drawText(fb, px + 8, 104, line, ORANGE);
+        std::snprintf(line, sizeof(line), "EXPLOSIONES %d", info.explosions);
+        drawText(fb, px + 8, 114, line, ORANGE);
+    }
 
     // --- Barras de velocidad y boost (abajo a la izquierda) ---
     drawText(fb, 16, H - 36, "VEL", GREY);
@@ -93,10 +109,11 @@ void drawHud(Framebuffer& fb, const HudInfo& info) {
             "T  ORBITAS   Y  TRAYECTORIA",
             "G  RELIEVE   N  NUEVA SEMILLA   M  NORMALES",
             "O  DESCARTE  L  LOD  B  CARAS TRASERAS",
+            "J  IR AL AGUJERO NEGRO (ARRIBA DEL SOL)",
             "R  REINICIAR  P  CAPTURA  ESC  SALIR",
         };
         const int lines = (int)(sizeof(help) / sizeof(help[0]));
-        const int hx = 8, hy = 76, hw = 292, hh = lines * 11 + 10;
+        const int hx = 8, hy = info.alternate ? 84 : 76, hw = 292, hh = lines * 11 + 10;
         darkenRect(fb, hx, hy, hw, hh, 0.6f);
         for (int i = 0; i < lines; ++i) drawText(fb, hx + 8, hy + 6 + i * 11, help[i], i == 0 ? ORANGE : WHITE);
     } else {

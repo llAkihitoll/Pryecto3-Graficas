@@ -20,7 +20,9 @@ find_package(ZLIB REQUIRED)
 
 add_executable(galaxia
     src/main.cpp
+    src/alternate.cpp
     src/asteroids.cpp
+    src/blackhole.cpp
     src/boost_flame.cpp
     src/camera.cpp
     src/font.cpp
@@ -28,6 +30,7 @@ add_executable(galaxia
     src/geometry.cpp
     src/hud.cpp
     src/mesh.cpp
+    src/minigames.cpp
     src/noise.cpp
     src/obj_loader.cpp
     src/parallel.cpp
