@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 #include "camera.h"
@@ -17,6 +18,7 @@
 #include "asteroids.h"
 #include "boost_flame.h"
 #include "particles.h"
+#include "minigames.h"
 
 // Resolucion interna del framebuffer. La ventana es mas grande y SDL solo
 // estira la imagen ya terminada al mostrarla.
@@ -35,6 +37,10 @@ const Vec3 CAR_START{-70.0f, 8.0f, 90.0f};
 
 // Segundos que pasan desde que el carro explota hasta que reaparece.
 const float RESPAWN_DELAY = 3.0f;
+
+// Duracion del viaje por el agujero negro: a la mitad (con la pantalla en
+// blanco) se cambia de universo.
+const float WARP_TIME = 2.4f;
 
 // Cinturon de asteroides: cuantas rocas y con que semilla se reparten.
 const int ASTEROID_COUNT = 220;
@@ -74,8 +80,9 @@ bool loadCar(const std::string& path, Mesh& mesh) {
 
 // Convierte una cadena de teclas simuladas ("wa", "wb", ...) en entrada.
 // Solo se usa para pruebas sin ventana: w s a d q e, i/k = flechas arriba/abajo,
-// b = boost, x = freno fuerte. En el guion de vuelo, f cambia el modo superficie
-// y v la gravedad.
+// b = boost, x = freno fuerte. En el guion de vuelo, f cambia el modo superficie,
+// v la gravedad, z pone el balon de Arena delante del carro y g pone el carro
+// frente al siguiente anillo de Cobalto.
 ShipInput inputFromString(const std::string& keys) {
     ShipInput in;
     for (char k : keys) {
@@ -116,6 +123,14 @@ std::vector<SphereCollider> collidersAt(const Scene& scene, float time) {
         bool sun = i == 0;
         SphereCollider c{b.position(time), b.velocity(time), b.radius};
         c.surfaceGravity = b.surfaceGravity;
+        c.cruiseAltitude = b.cruiseAltitude;
+        if (b.blackHole) {
+            // Se atraviesa (no hay superficie) y su gravedad alcanza 7 radios.
+            c.solid = false;
+            c.gravityRange = 7.0f * b.radius;
+            colliders.push_back(c);
+            continue;
+        }
         c.slowZone = sun ? 0.0f : 2.5f * b.radius;
         c.surfaceZone = sun ? 0.0f : 1.5f * b.radius;
         c.gravityRange = (sun ? 5.0f : 3.0f) * b.radius;
@@ -149,8 +164,28 @@ std::vector<std::pair<std::string, float>> parseFlightScript(const std::string& 
 
 Ship makeStartShip(const Scene& scene, float time) {
     Ship ship;
-    ship.position = CAR_START;
-    ship.lookAt(scene.bodies[1].position(time)); // arranca mirando al planeta
+    ship.position = scene.spawnPoint;
+    ship.lookAt(scene.bodies[scene.spawnLook].position(time)); // arranca mirando al planeta
+    return ship;
+}
+
+// Tecla J: a la misma altura que el agujero negro (la camara de vuelo libre
+// va nivelada, asi se ve de frente), fuera del alcance de su gravedad. Se
+// mira desde el lado hacia el que esta inclinado el disco, para verlo abierto.
+Ship makeHoleViewShip(const Scene& scene, float time) {
+    const CelestialBody& hole = *scene.blackHole();
+    Vec3 center = hole.position(time);
+    Ship ship;
+    ship.position = center + normalize(Vec3{0.9f, 0.0f, 0.4f}) * (hole.radius * 9.0f);
+    ship.lookAt(center);
+    return ship;
+}
+
+// Al llegar por el agujero negro a ese universo.
+Ship makeArrivalShip(const Scene& scene, float time) {
+    Ship ship;
+    ship.position = scene.arrivalPoint;
+    ship.lookAt(scene.bodies[scene.spawnLook].position(time));
     return ship;
 }
 
@@ -191,6 +226,8 @@ int main(int argc, char* argv[]) {
     //   --test-hit                pone un asteroide quieto delante del carro (para chocarlo)
     //   --no-normal-map           sin mapas de normales en el carro, para comparar
     //   --dt-test                 prueba de consistencia con distintos FPS
+    //   --alt                     empieza en el universo alterno
+    //   --hole                    empieza junto al agujero negro, mirandolo (como la tecla J)
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f, zoom = 0.0f;
     std::string flightScript;
@@ -204,6 +241,7 @@ int main(int argc, char* argv[]) {
     bool showOrbits = true;     // tecla T: lineas de las orbitas de los planetas
     bool showTrajectory = true; // tecla Y: puntos de la trayectoria prevista del carro
     bool noNormalMap = false;
+    bool startAlt = false, startAtHole = false;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
@@ -224,21 +262,48 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--test-hit") == 0) testHit = true;
         else if (std::strcmp(argv[i], "--no-normal-map") == 0) noNormalMap = true;
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
+        else if (std::strcmp(argv[i], "--alt") == 0) startAlt = true;
+        else if (std::strcmp(argv[i], "--hole") == 0) startAtHole = true;
     }
 
     // Construir la escena incluye hornear las superficies del sol y Duna.
     auto buildStart = std::chrono::steady_clock::now();
-    Scene scene;
-    scene.build(propSeed);
+    Scene homeScene;
+    homeScene.build(propSeed);
+    homeScene.spawnPoint = homeScene.arrivalPoint = CAR_START; // al regresar se sale en el inicio
     if (flatTerrain) {
-        scene.deformTerrain = false;
-        scene.buildProps(propSeed);
+        homeScene.deformTerrain = false;
+        homeScene.buildProps(propSeed);
     }
+    Scene* scene = &homeScene; // el universo donde esta el carro
     std::printf("Escena lista (texturas horneadas) en %.0f ms\n",
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - buildStart).count());
     if (dtTest) {
-        runDtTest(scene);
+        runDtTest(homeScene);
         return 0;
+    }
+
+    // El universo alterno se hornea en otro hilo mientras se juega en el
+    // normal; se espera a que termine solo al cruzar el agujero negro. Al
+    // salir del programa tambien se espera (el destructor lo une).
+    Scene altScene;
+    struct Joiner {
+        std::thread thread;
+        ~Joiner() { if (thread.joinable()) thread.join(); }
+    } altBuilder{std::thread([&altScene]() { altScene.buildAlternate(); })};
+    SoccerGame soccer;
+    RingRace race;
+    bool altReady = false;
+    auto ensureAlt = [&]() {
+        if (altReady) return;
+        altBuilder.thread.join();
+        soccer.build(altScene.bodies[ALT_ARENA].radius);
+        race.build(altScene.bodies[ALT_COBALT].radius);
+        altReady = true;
+    };
+    if (startAlt) {
+        ensureAlt();
+        scene = &altScene;
     }
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -275,13 +340,13 @@ int main(int argc, char* argv[]) {
     u.normalMapping = !noNormalMap;
     u.projection = perspective(radians(FOV_DEG), (float)RENDER_WIDTH / RENDER_HEIGHT, Z_NEAR, Z_FAR);
 
-    Ship ship = makeStartShip(scene, elapsed);
+    Ship ship = makeStartShip(*scene, elapsed);
     ShipInput lastInput; // teclas del ultimo cuadro, para predecir la trayectoria
 
     // Particulas (estela del boost y explosiones) y cinturon de asteroides.
     Particles particles;
     AsteroidBelt belt;
-    belt.build(ASTEROID_SEED, scene.rockModels, ASTEROID_COUNT);
+    belt.build(ASTEROID_SEED, homeScene.rockModels, ASTEROID_COUNT);
 
     // Despues de mover el carro: choques con asteroides, vuelo de los
     // asteroides (y sus explosiones) y la estela del boost. Mientras haya
@@ -304,10 +369,16 @@ int main(int argc, char* argv[]) {
                 respawnTimer = RESPAWN_DELAY;
             }
             respawnTimer -= step;
-        } else {
+        } else if (scene == &homeScene) {
             belt.collideShip(ship);
         }
-        belt.update(elapsed, step, colliders, particles);
+        // El cinturon de asteroides es del universo normal; los minijuegos, del alterno.
+        if (scene == &homeScene) {
+            belt.update(elapsed, step, colliders, particles);
+        } else {
+            soccer.update(step, ship, altScene.bodies[ALT_ARENA], elapsed, particles);
+            race.update(step, ship, altScene.bodies[ALT_COBALT], elapsed);
+        }
         if (ship.boosting && !ship.crashed) {
             Mat4 carMatrix = ship.modelMatrix();
             for (int i = 0; i < 2; ++i) {
@@ -319,22 +390,23 @@ int main(int argc, char* argv[]) {
         wasBoosting = ship.boosting;
         particles.update(step);
     };
-    if (nearBody > 0 && nearBody < (int)scene.bodies.size()) {
+    if (nearBody > 0 && nearBody < (int)scene->bodies.size()) {
         // Del lado del sol (de dia), a 3 radios del centro y mirando al planeta.
-        const CelestialBody& b = scene.bodies[nearBody];
+        const CelestialBody& b = scene->bodies[nearBody];
         Vec3 center = b.position(elapsed);
-        Vec3 towardSun = normalize(scene.sunPosition(elapsed) - center);
+        Vec3 towardSun = normalize(scene->sunPosition(elapsed) - center);
         float dist = nearDist > 0.0f ? nearDist : b.radius * 3.0f;
         ship.position = center + normalize(towardSun + Vec3{0.0f, 0.3f, 0.0f}) * dist;
         // Con --near-dist apunta adelante del planeta (a ~45 u/s llega cuando el planeta ya avanzo).
         ship.lookAt(nearDist > 0.0f ? b.position(elapsed + dist / 45.0f) : center);
     }
+    if (startAtHole) ship = makeHoleViewShip(*scene, elapsed);
     if (testImpact) {
         // Se apunta a donde estara Duna cuando llegue la roca (el planeta se mueve).
         Vec3 from = ship.position + Vec3{2.0f, 3.0f, 0.0f};
         float speed = 40.0f;
-        float travel = length(scene.bodies[1].position(elapsed) - from) / speed;
-        Vec3 aim = scene.bodies[1].position(elapsed + travel);
+        float travel = length(scene->bodies[1].position(elapsed) - from) / speed;
+        Vec3 aim = scene->bodies[1].position(elapsed + travel);
         belt.launchForTest(from, normalize(aim - from) * speed);
     }
     if (testHit) belt.launchForTest(ship.position + ship.forward * 8.0f, Vec3{0, 0, 0});
@@ -353,25 +425,83 @@ int main(int argc, char* argv[]) {
         crashCameraPlaced = true;
     };
 
+    auto respawnShip = [&]() {
+        ship = makeStartShip(*scene, elapsed);
+        crashShown = false;
+        crashCameraPlaced = false;
+        camera.snapTo(ship);
+    };
+
+    // Viaje por el agujero negro: al cruzar el horizonte empieza la cuenta;
+    // a la mitad se cambia de universo y el carro sale junto al agujero del
+    // otro lado. Devuelve true en el cuadro en que se cambio.
+    float warpTimer = 0.0f;
+    bool warpSwapped = false;
+    auto updateWarp = [&](float step) {
+        if (warpTimer <= 0.0f) {
+            const CelestialBody* hole = scene->blackHole();
+            if (hole && !ship.crashed && length(ship.position - hole->position(elapsed)) < hole->radius * 0.85f) {
+                warpTimer = WARP_TIME;
+                warpSwapped = false;
+            }
+            return false;
+        }
+        warpTimer = std::max(0.0f, warpTimer - step);
+        if (warpSwapped || warpTimer > WARP_TIME * 0.5f) return false;
+        ensureAlt();
+        scene = scene == &homeScene ? &altScene : &homeScene;
+        std::printf("Cruzaste el agujero negro: %s\n", scene->alternate ? "universo alterno" : "universo normal");
+        ship = makeArrivalShip(*scene, elapsed);
+        particles.clear();
+        crashShown = false;
+        crashCameraPlaced = false;
+        camera.snapTo(ship);
+        warpSwapped = true;
+        return true;
+    };
+
+    // Un paso de la simulacion: carro, efectos, minijuegos, agujero negro y
+    // camara. Lo usan el ciclo normal y el guion de vuelo de las pruebas.
+    auto simulate = [&](const ShipInput& in, float step, bool looking, float mouseDx, float mouseDy, bool respawn) {
+        std::vector<SphereCollider> colliders = collidersAt(*scene, elapsed);
+        if (warpTimer <= 0.0f) ship.update(in, step, colliders); // dentro del agujero el carro no se controla
+        updateEffects(step, colliders);
+        placeCrashCamera(colliders);
+        if (respawn && ship.crashed && respawnTimer <= 0.0f) respawnShip(); // reaparece en el punto de inicio
+        if (updateWarp(step)) colliders = collidersAt(*scene, elapsed);
+        // En la cancha la camara va mas baja y mira al frente, para ver el balon.
+        bool arenaCamera = scene->alternate && ship.nearest == ALT_ARENA;
+        float k = 1.0f - std::exp(-3.0f * step);
+        camera.surfaceHeight += ((arenaCamera ? 2.0f : 3.5f) - camera.surfaceHeight) * k;
+        camera.surfaceLookDown += ((arenaCamera ? 0.2f : 2.5f) - camera.surfaceLookDown) * k;
+        // Mientras esta destruido la camara se queda quieta mirando la explosion.
+        if (!ship.crashed) camera.update(ship, step, looking, mouseDx, mouseDy);
+        camera.keepOutside(colliders);
+    };
+
     // Modo de prueba: simula el guion de vuelo a 60 FPS antes de la captura
     // e imprime la altitud al final de cada tramo, y cuantos grados ha
     // recorrido el carro alrededor del planeta (360 = una vuelta completa).
     if (screenshotPath) {
         float degreesAround = 0.0f;
-        const CelestialBody& around = scene.bodies[nearBody > 0 ? nearBody : 1];
+        const CelestialBody& around = scene->bodies[nearBody > 0 ? nearBody : 1];
         Vec3 prevDir = normalize(ship.position - around.position(elapsed));
         for (const auto& seg : parseFlightScript(flightScript)) {
             ShipInput in = inputFromString(seg.first);
             lastInput = in;
             if (seg.first.find('f') != std::string::npos) ship.surfaceEnabled = !ship.surfaceEnabled;
             if (seg.first.find('v') != std::string::npos) ship.gravityEnabled = !ship.gravityEnabled;
+            if (seg.first.find('g') != std::string::npos && scene->alternate) {
+                race.placeShipForTest(ship, scene->bodies[ALT_COBALT].position(elapsed));
+            }
+            if (seg.first.find('z') != std::string::npos && scene->alternate) {
+                Vec3 center = scene->bodies[ALT_ARENA].position(elapsed);
+                Vec3 ahead = ship.position + ship.forward * 9.0f - center;
+                soccer.placeBallForTest(normalize(ahead) * (scene->bodies[ALT_ARENA].radius + 2.2f));
+            }
             int frames = (int)(seg.second * 60.0f + 0.5f);
             for (int i = 0; i < frames; ++i) {
-                std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
-                ship.update(in, 1.0f / 60.0f, colliders);
-                updateEffects(1.0f / 60.0f, colliders);
-                placeCrashCamera(colliders);
-                if (!ship.crashed) camera.update(ship, 1.0f / 60.0f, false, 0, 0);
+                simulate(in, 1.0f / 60.0f, false, 0, 0, false);
                 elapsed += 1.0f / 60.0f;
                 Vec3 dir = normalize(ship.position - around.position(elapsed));
                 degreesAround += std::acos(clampf(dot(prevDir, dir), -1.0f, 1.0f)) * 180.0f / PI;
@@ -379,16 +509,25 @@ int main(int argc, char* argv[]) {
             }
             std::printf("  tramo %-4s %.1f s -> altitud %.2f sobre %s, velocidad %.1f, %s, %.0f grados alrededor"
                         " | asteroides golpeados %d, explosiones %d\n",
-                        seg.first.c_str(), seg.second, ship.altitude, scene.bodies[ship.nearest].name.c_str(),
+                        seg.first.c_str(), seg.second, ship.altitude,
+                        ship.nearest >= 0 ? scene->bodies[ship.nearest].name.c_str() : "-",
                         length(ship.velocity),
                         ship.crashed ? "EXPLOTO" : (ship.surfaceMode ? "superficie" : "libre"), degreesAround,
                         belt.flying(), belt.explosions());
+            if (scene->alternate) {
+                Vec3 ball = soccer.ballPosition();
+                std::printf("         balon: %d toques, altura %.2f, %.0f grados del polo norte | marcador %d - %d\n",
+                            soccer.ballTouches(), length(ball) - scene->bodies[ALT_ARENA].radius,
+                            std::acos(clampf(normalize(ball).y, -1.0f, 1.0f)) * 180.0f / PI, soccer.blueScore,
+                            soccer.orangeScore);
+                std::printf("         anillos: siguiente %d, mejor tiempo %.2f\n", race.nextGate(), race.bestTime());
+            }
         }
         camera.lookYaw = radians(lookYawDeg);
         camera.lookPitch = radians(lookPitchDeg);
         if (zoom > 0.0f) camera.distance = zoom;
         if (!ship.crashed) camera.snapTo(ship);
-        camera.keepOutside(collidersAt(scene, elapsed));
+        camera.keepOutside(collidersAt(*scene, elapsed));
     }
 
     RenderStats stats;
@@ -432,7 +571,7 @@ int main(int argc, char* argv[]) {
                     case SDLK_ESCAPE: running = false; break;
                     case SDLK_l: opt.autoLod = !opt.autoLod; break;
                     case SDLK_o: opt.cullObjects = !opt.cullObjects; break;
-                    case SDLK_n: scene.buildProps(scene.propSeed + 1); break; // otra semilla de distribucion
+                    case SDLK_n: scene->buildProps(scene->propSeed + 1); break; // otra semilla de distribucion
                     case SDLK_v: ship.gravityEnabled = !ship.gravityEnabled; break;
                     case SDLK_t: showOrbits = !showOrbits; break;
                     case SDLK_y: showTrajectory = !showTrajectory; break;
@@ -442,17 +581,21 @@ int main(int argc, char* argv[]) {
                         helpTouched = true;
                         break;
                     case SDLK_g: // deformacion de Duna: los objetos se vuelven a apoyar en el suelo
-                        scene.deformTerrain = !scene.deformTerrain;
-                        scene.buildProps(scene.propSeed);
+                        scene->deformTerrain = !scene->deformTerrain;
+                        scene->buildProps(scene->propSeed);
                         break;
                     case SDLK_f: ship.surfaceEnabled = !ship.surfaceEnabled; break;
                     case SDLK_b: u.cullBackFaces = !u.cullBackFaces; break;
                     case SDLK_r:
-                        ship = makeStartShip(scene, elapsed);
-                        crashShown = false;
-                        crashCameraPlaced = false;
-                        camera.snapTo(ship);
-                        camera.keepOutside(collidersAt(scene, elapsed));
+                        respawnShip();
+                        camera.keepOutside(collidersAt(*scene, elapsed));
+                        break;
+                    case SDLK_j: // junto al agujero negro de este universo, mirandolo
+                        if (warpTimer <= 0.0f) {
+                            respawnShip();
+                            ship = makeHoleViewShip(*scene, elapsed);
+                            camera.snapTo(ship);
+                        }
                         break;
                     case SDLK_p:
                         if (fb.savePNG("captura.png")) std::printf("Captura guardada en captura.png\n");
@@ -463,36 +606,29 @@ int main(int argc, char* argv[]) {
         bool looking = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
 
         if (!screenshotPath) {
-            std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
             lastInput = readKeyboard();
-            ship.update(lastInput, dt, colliders);
-            updateEffects(dt, colliders);
-            placeCrashCamera(colliders);
-            if (ship.crashed && respawnTimer <= 0.0f) {
-                // Reaparece en el punto de inicio.
-                ship = makeStartShip(scene, elapsed);
-                crashShown = false;
-                crashCameraPlaced = false;
-                camera.snapTo(ship);
-            }
-            // Mientras esta destruido la camara se queda quieta mirando la explosion.
-            if (!ship.crashed) camera.update(ship, dt, looking, mouseDx, mouseDy);
-            camera.keepOutside(colliders);
+            simulate(lastInput, dt, looking, mouseDx, mouseDy, true);
         }
 
         u.cameraPos = camera.eye;
         u.view = camera.view();
         u.time = elapsed;
-        u.lightPos = scene.sunPosition(elapsed);
+        u.lightPos = scene->sunPosition(elapsed);
 
         Uint64 frameStart = SDL_GetPerformanceCounter();
         fb.clear();
         stats.reset();
-        scene.skybox.draw(fb, u); // nebulosas, galaxias y Via Lactea de fondo
-        scene.drawStars(fb, u);
-        scene.drawBodies(fb, u, stats, opt);
-        if (showOrbits) scene.drawOrbits(fb, u);
-        belt.draw(fb, u, stats, opt);
+        scene->skybox.draw(fb, u); // nebulosas, galaxias y Via Lactea de fondo
+        scene->drawStars(fb, u);
+        scene->drawBodies(fb, u, stats, opt);
+        if (scene->alternate) {
+            soccer.draw(fb, u, stats, scene->bodies[ALT_ARENA]);
+            race.draw(fb, u, stats, scene->bodies[ALT_COBALT]);
+        }
+        if (showOrbits) scene->drawOrbits(fb, u);
+        if (scene == &homeScene) belt.draw(fb, u, stats, opt);
+        // Al final del fondo: su lente dobla lo que ya esta dibujado detras.
+        scene->drawBlackHoles(fb, u, stats, opt);
 
         // El carro tambien pasa por el descarte y el nivel de detalle: si
         // se ve pequeno (camara lejos) basta con el modelo reducido.
@@ -523,7 +659,7 @@ int main(int argc, char* argv[]) {
         // curvan los planetas y el sol.
         if (showTrajectory && ship.gravityEnabled && !ship.surfaceMode && !ship.crashed) {
             Ship ghost = ship;
-            std::vector<SphereCollider> colliders = collidersAt(scene, elapsed);
+            std::vector<SphereCollider> colliders = collidersAt(*scene, elapsed);
             for (int i = 1; i <= 30; ++i) {
                 ghost.update(lastInput, 0.1f, colliders);
                 if (ghost.surfaceMode) break;
@@ -534,7 +670,7 @@ int main(int argc, char* argv[]) {
 
         // Etiquetas con el nombre y la distancia encima de cada cuerpo que se
         // ve (si no esta tan cerca que ocupe toda la pantalla).
-        for (const CelestialBody& b : scene.bodies) {
+        for (const CelestialBody& b : scene->bodies) {
             if (b.currentLod < 0) continue; // descartado: no esta en la vista
             Vec3 center = b.position(elapsed);
             Vec4 c = u.projection * u.view * Vec4(center, 1.0f);
@@ -567,27 +703,45 @@ int main(int argc, char* argv[]) {
         hud.maxSpeed = ship.tuning.maxBoostSpeed;
         hud.boostFraction = ship.boostFuel / ship.tuning.boostCapacity;
         hud.boosting = ship.boosting;
-        hud.nearName = ship.nearest >= 0 ? scene.bodies[ship.nearest].name : "-";
+        hud.nearName = ship.nearest >= 0 ? scene->bodies[ship.nearest].name : "-";
         hud.altitude = ship.altitude;
         hud.surfaceMode = ship.surfaceMode;
         hud.surfaceEnabled = ship.surfaceEnabled;
         hud.gravity = ship.gravityEnabled;
-        hud.relief = scene.deformTerrain;
+        hud.relief = scene->deformTerrain;
         hud.normalMapping = u.normalMapping;
         hud.asteroids = belt.total();
         hud.asteroidsFlying = belt.flying();
         hud.explosions = belt.explosions();
         hud.opt = opt;
         hud.stats = stats;
-        hud.seed = scene.propSeed;
+        hud.seed = scene->propSeed;
         hud.showHelp = showHelp;
+        hud.alternate = scene->alternate;
         drawHud(fb, hud);
+        // Panel del minijuego al acercarse a su planeta.
+        if (scene->alternate && !ship.crashed && ship.nearest >= 0) {
+            bool close = ship.altitude < scene->bodies[ship.nearest].radius * 1.5f;
+            if (ship.nearest == ALT_ARENA && close) soccer.drawHud(fb, ship.surfaceMode);
+            if (ship.nearest == ALT_COBALT && close) race.drawHud(fb, ship.surfaceMode);
+        }
         if (ship.crashed) {
             const char* msg = "EL CARRO EXPLOTO";
             drawText(fb, (RENDER_WIDTH - textWidth(msg, 3)) / 2, RENDER_HEIGHT / 2 - 40, msg, 0xFFFF8040, 3);
             char sub[64];
             std::snprintf(sub, sizeof(sub), "REAPARECE EN %.0f  (R: AHORA)", std::max(0.0f, std::ceil(respawnTimer)));
             drawText(fb, (RENDER_WIDTH - textWidth(sub, 2)) / 2, RENDER_HEIGHT / 2, sub, 0xFFE8ECF4, 2);
+        }
+        // Viaje por el agujero negro: la pantalla se pone blanca y vuelve.
+        if (warpTimer > 0.0f) {
+            float half = WARP_TIME * 0.5f;
+            float phase = 1.0f - std::fabs(warpTimer - half) / half;
+            tintScreen(fb, Vec3{0.92f, 0.95f, 1.0f}, phase * phase * (3.0f - 2.0f * phase));
+            if (phase > 0.35f) {
+                const char* msg = warpSwapped ? (scene->alternate ? "UNIVERSO ALTERNO" : "DE REGRESO A CASA")
+                                              : "CRUZANDO EL HORIZONTE";
+                drawText(fb, (RENDER_WIDTH - textWidth(msg, 3)) / 2, RENDER_HEIGHT / 2 - 12, msg, 0xFF203050, 3);
+            }
         }
         double frameMs = 1000.0 * (SDL_GetPerformanceCounter() - frameStart) / SDL_GetPerformanceFrequency();
         lastFrameMs = (float)frameMs;
@@ -598,8 +752,8 @@ int main(int argc, char* argv[]) {
                         "triangulos enviados %d, rasterizados %d | LOD (-1 = descartado) Sol %d, Duna %d, "
                         "Glacia %d, Vergel %d, carro %s\n",
                         screenshotPath, frameMs, stats.objectsDrawn, stats.objectsCulled, stats.propsDrawn,
-                        stats.trianglesIn, stats.trianglesDrawn, scene.bodies[0].currentLod,
-                        scene.bodies[1].currentLod, scene.bodies[2].currentLod, scene.bodies[3].currentLod,
+                        stats.trianglesIn, stats.trianglesDrawn, scene->bodies[0].currentLod,
+                        scene->bodies[1].currentLod, scene->bodies[2].currentLod, scene->bodies[3].currentLod,
                         carUsesLod ? "reducido" : "completo");
             running = false;
         }
@@ -611,16 +765,16 @@ int main(int argc, char* argv[]) {
         if (titleTimer >= 0.5f) {
             displayedFps = framesCounted / titleTimer;
             char title[320];
-            const char* nearName = ship.nearest >= 0 ? scene.bodies[ship.nearest].name.c_str() : "-";
+            const char* nearName = ship.nearest >= 0 ? scene->bodies[ship.nearest].name.c_str() : "-";
             std::snprintf(title, sizeof(title),
-                          "Proyecto 3 - Galaxia | %.0f FPS | vel %.1f | boost %.0f%% | %s a %.1f%s | "
+                          "Proyecto 3 - Galaxia%s | %.0f FPS | vel %.1f | boost %.0f%% | %s a %.1f%s | "
                           "objetos %d (descartados %d) | superficie %d (semilla %u) | tris %d / raster %d | "
                           "descarte %s, LOD %s, relieve %s, gravedad %s",
-                          framesCounted / titleTimer, speed, 100.0f * ship.boostFuel / ship.tuning.boostCapacity,
+                          scene->alternate ? " (universo alterno)" : "", framesCounted / titleTimer, speed, 100.0f * ship.boostFuel / ship.tuning.boostCapacity,
                           nearName, ship.altitude, ship.surfaceMode ? " (superficie)" : "", stats.objectsDrawn,
-                          stats.objectsCulled, stats.propsDrawn, scene.propSeed, stats.trianglesIn,
+                          stats.objectsCulled, stats.propsDrawn, scene->propSeed, stats.trianglesIn,
                           stats.trianglesDrawn, opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no",
-                          scene.deformTerrain ? "si" : "no", ship.gravityEnabled ? "si" : "no");
+                          scene->deformTerrain ? "si" : "no", ship.gravityEnabled ? "si" : "no");
             SDL_SetWindowTitle(window, title);
             titleTimer = 0.0f;
             framesCounted = 0;

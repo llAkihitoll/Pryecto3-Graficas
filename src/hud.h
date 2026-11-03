@@ -12,6 +12,10 @@ void fillRect(Framebuffer& fb, int x, int y, int w, int h, uint32_t argb);
 // amount = 0 lo deja igual, 1 lo vuelve negro.
 void darkenRect(Framebuffer& fb, int x, int y, int w, int h, float amount);
 
+// Mezcla toda la pantalla con un color: amount = 0 la deja igual, 1 la
+// pinta toda de ese color. Se usa para el destello al cruzar el agujero negro.
+void tintScreen(Framebuffer& fb, const Vec3& color, float amount);
+
 // Barra horizontal con marco: fraction (0..1) indica cuanto esta llena.
 void drawBar(Framebuffer& fb, int x, int y, int w, int h, float fraction, uint32_t argb);
 
@@ -31,6 +35,7 @@ struct HudInfo {
     RenderStats stats;
     unsigned seed = 0;
     bool showHelp = true;
+    bool alternate = false; // en el universo alterno
 };
 
 void drawHud(Framebuffer& fb, const HudInfo& info);
