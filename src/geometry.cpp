@@ -101,3 +101,35 @@ void displaceSphere(Mesh& mesh, const std::function<float(const Vec3&)>& shape) 
     }
     for (Vertex& v : mesh.vertices) v.normal = normalize(v.normal);
 }
+
+Mesh makeTorus(float major, float minor, int segments, int sides, const Material& material) {
+    Mesh mesh;
+    mesh.materials.push_back(material);
+    for (int i = 0; i < segments; ++i) {
+        float a = 2.0f * PI * i / segments;
+        Vec3 ring{std::cos(a), 0.0f, std::sin(a)}; // direccion del centro del tubo
+        for (int j = 0; j < sides; ++j) {
+            float b = 2.0f * PI * j / sides;
+            Vec3 n = ring * std::cos(b) + Vec3{0, 1, 0} * std::sin(b);
+            mesh.vertices.push_back(Vertex{ring * major + n * minor, n});
+        }
+    }
+    for (int i = 0; i < segments; ++i) {
+        int i1 = (i + 1) % segments;
+        for (int j = 0; j < sides; ++j) {
+            int j1 = (j + 1) % sides;
+            int a = i * sides + j, b = i1 * sides + j, c = i1 * sides + j1, d = i * sides + j1;
+            mesh.triangles.push_back(Triangle{a, c, b, 0});
+            mesh.triangles.push_back(Triangle{a, d, c, 0});
+        }
+    }
+    return mesh;
+}
+
+Mat4 basisFromY(const Vec3& yAxis, const Vec3& origin) {
+    Vec3 y = normalize(yAxis);
+    Vec3 helper = std::fabs(y.y) < 0.9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
+    Vec3 x = normalize(cross(helper, y));
+    Vec3 z = cross(x, y);
+    return fromBasis(x, y, z, origin);
+}

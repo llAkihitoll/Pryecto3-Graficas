@@ -20,6 +20,13 @@ struct Uniforms {
     Vec3 objectCenter; // centro del planeta sobre el que estan los objetos de superficie
     float objectRadius = 0.0f; // radio de ese planeta (para la sombra sobre los anillos)
     bool normalMapping = true; // tecla M: usar los mapas de normales del carro
+    // Mezcla aditiva: el color se suma al que ya habia (gas que brilla, como
+    // el disco del agujero negro). Igual escribe su profundidad.
+    bool additive = false;
+    bool depthWrite = true; // false = prueba la profundidad pero no la guarda
+    // Para shaders que se dibujan en varias pasadas (el disco del agujero
+    // negro: primero su mitad de atras y luego la de adelante).
+    int pass = 0;
 };
 
 // Lo que recibe el shader de fragmentos por cada pixel cubierto. worldPos,

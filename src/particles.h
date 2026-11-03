@@ -28,6 +28,7 @@ public:
     void draw(Framebuffer& fb, const Uniforms& u) const;
 
     int count() const { return (int)particles.size(); }
+    void clear() { particles.clear(); }
 
 private:
     struct Particle {

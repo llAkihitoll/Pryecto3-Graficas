@@ -24,6 +24,8 @@ public:
     // Profundidad guardada como 1/w (w = distancia a la camara). Un valor
     // mas grande significa mas cerca; 0 es "infinitamente lejos".
     float& depthAt(int x, int y) { return depth[(size_t)y * w + x]; }
+    // Todos los pixeles (para copiar el cuadro antes de deformarlo).
+    const std::vector<uint32_t>& colors() const { return pixels; }
 
     void renderBuffer(SDL_Renderer* renderer, SDL_Texture* texture);
     bool saveBMP(const char* path) const;

@@ -125,7 +125,7 @@ static long long rasterRows(Framebuffer& fb, const SetupTriangle& t, int y0, int
             float invW = l0 * t.s[0].invW + l1 * t.s[1].invW + l2 * t.s[2].invW;
             float& depth = fb.depthAt(x, y);
             if (invW <= depth) continue;
-            depth = invW;
+            if (u.depthWrite) depth = invW;
 
             float w = 1.0f / invW;
             frag.worldPos = (t.world[0] * l0 + t.world[1] * l1 + t.world[2] * l2) * w;
@@ -137,7 +137,14 @@ static long long rasterRows(Framebuffer& fb, const SetupTriangle& t, int y0, int
             }
             frag.x = x;
             frag.y = y;
-            fb.setPixel(x, y, toARGB(shader(frag, u)));
+            if (u.additive) {
+                Vec3 c = shader(frag, u);
+                uint32_t p = fb.getPixel(x, y);
+                c += Vec3{((p >> 16) & 0xFF) / 255.0f, ((p >> 8) & 0xFF) / 255.0f, (p & 0xFF) / 255.0f};
+                fb.setPixel(x, y, toARGB(c));
+            } else {
+                fb.setPixel(x, y, toARGB(shader(frag, u)));
+            }
             shaded++;
         }
     }

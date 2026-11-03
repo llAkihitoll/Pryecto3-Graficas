@@ -52,13 +52,13 @@ static Vec3 galaxyLight(const Galaxy& g, const Vec3& p) {
     return Vec3{1.0f, 0.85f, 0.6f} * (core * 1.4f) + g.armColor * (disk * 0.7f);
 }
 
-void Skybox::bake(unsigned seed, int size) {
+void Skybox::bake(unsigned seed, int size, const SkyPalette& palette) {
     Noise noise(seed);
     std::mt19937 rng(seed);
     std::uniform_real_distribution<float> unit(0.0f, 1.0f);
 
     // Plano de la Via Lactea: una franja alrededor de un gran circulo del cielo.
-    const Vec3 bandNormal = normalize(Vec3{0.3f, 0.85f, -0.4f});
+    const Vec3 bandNormal = normalize(palette.bandNormal);
 
     std::vector<Galaxy> galaxies;
     for (int i = 0; i < 6; ++i) {
@@ -73,18 +73,18 @@ void Skybox::bake(unsigned seed, int size) {
         g.size = 0.02f + 0.035f * unit(rng);
         g.flatten = 0.3f + 0.7f * unit(rng);
         g.twist = 3.0f + 3.0f * unit(rng);
-        g.armColor = lerp(Vec3{0.55f, 0.65f, 1.0f}, Vec3{0.9f, 0.7f, 1.0f}, unit(rng));
+        g.armColor = lerp(palette.armA, palette.armB, unit(rng));
         galaxies.push_back(g);
     }
 
     const Nebula nebulae[] = {
-        {normalize(Vec3{0.8f, 0.2f, 0.5f}), 2.2f, {0.9f, 0.25f, 0.6f}, {0.0f, 0.0f, 0.0f}},  // magenta
-        {normalize(Vec3{-0.6f, 0.4f, -0.7f}), 2.6f, {0.15f, 0.75f, 0.7f}, {7.0f, 3.0f, 1.0f}}, // turquesa
-        {normalize(Vec3{-0.2f, -0.7f, 0.6f}), 3.0f, {0.4f, 0.35f, 1.0f}, {2.0f, 9.0f, 4.0f}},  // azul violeta
+        {normalize(Vec3{0.8f, 0.2f, 0.5f}), 2.2f, palette.nebulae[0], {0.0f, 0.0f, 0.0f}},
+        {normalize(Vec3{-0.6f, 0.4f, -0.7f}), 2.6f, palette.nebulae[1], {7.0f, 3.0f, 1.0f}},
+        {normalize(Vec3{-0.2f, -0.7f, 0.6f}), 3.0f, palette.nebulae[2], {2.0f, 9.0f, 4.0f}},
     };
 
     sky.bake(size, [&](const Vec3& p) {
-        Vec3 color{0.012f, 0.014f, 0.035f}; // fondo casi negro, un poco azulado
+        Vec3 color = palette.background;
 
         // Via Lactea: brillo segun que tan cerca del plano, con grumos de
         // estrellas (fbm) y canales de polvo oscuro (donde el ruido cruza cero).
@@ -92,7 +92,7 @@ void Skybox::bake(unsigned seed, int size) {
         float band = std::exp(-h * h * 28.0f);
         float clumps = 0.5f + 0.5f * noise.fbm(p * 6.0f, 4);
         float dust = smoothstep(0.0f, 0.12f, std::fabs(noise.fbm(p * 3.5f + Vec3{4.0f, 1.0f, 2.0f}, 4)));
-        color += Vec3{0.32f, 0.3f, 0.36f} * (band * clumps * (0.25f + 0.75f * dust) * 0.5f);
+        color += palette.band * (band * clumps * (0.25f + 0.75f * dust) * 0.5f);
 
         // Nebulosas: ruido fractal deformado con otro ruido (remolinos),
         // limitado a una zona alrededor de su centro.

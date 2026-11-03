@@ -97,7 +97,8 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
     Vec3 n; // vertical del planeta en la posicion del carro
     if (surfaceMode) {
         n = normalize(position - bodies[nearest].center);
-        if (!wasSurface) holdAltitude = t.cruiseAltitude; // al entrar baja a la altitud de crucero
+        // Al entrar baja a la altitud de crucero (la del planeta, si tiene una propia).
+        if (!wasSurface) holdAltitude = bodies[nearest].cruiseAltitude > 0.0f ? bodies[nearest].cruiseAltitude : t.cruiseAltitude;
     }
 
     // --- Giro progresivo: la velocidad angular se acerca a la deseada ---
@@ -244,6 +245,7 @@ void Ship::step(const ShipInput& in, float h, const std::vector<SphereCollider>&
 void Ship::collide(const std::vector<SphereCollider>& bodies) {
     for (size_t i = 0; i < bodies.size(); ++i) {
         const SphereCollider& b = bodies[i];
+        if (!b.solid) continue;
         Vec3 d = position - b.center;
         float dist = length(d);
         float minDist = b.surfaceRadius(position) + tuning.collisionRadius;
