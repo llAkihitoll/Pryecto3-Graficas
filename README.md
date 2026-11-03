@@ -28,6 +28,17 @@ De fondo hay un universo generado por procedimiento: la **Vía Láctea**, **nebu
 El carro puede viajar entre ellos, acercarse, rodearlos en **modo superficie** y volver a alejarse
 sin pantallas de carga ni cambios de escena.
 
+Muy por encima del sol hay un **agujero negro** con disco de acreción y **lente gravitacional**.
+Cruzar su horizonte lleva a un **universo alterno** con una estrella blanca, *Albor*, y dos
+planetas con **minijuego**:
+
+| Planeta | Minijuego |
+|---|---|
+| **Arena** | **Fútbol como en Rocket League** sobre el planeta: el balón tiene física propia, la portería azul está en el polo norte y la naranja en el sur |
+| **Cobalto** | **Carrera de anillos** contra reloj: 14 anillos a distintas alturas alrededor del planeta |
+
+Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
+
 | | |
 |---|---|
 | ![Duna](docs/capturas/02_duna.png) | ![Glacia](docs/capturas/03_glacia.png) |
@@ -35,7 +46,9 @@ sin pantallas de carga ni cambios de escena.
 | ![Aurelia y sus anillos](docs/capturas/08_aurelia.png) | ![Ignis](docs/capturas/09_ignis.png) |
 | ![Vista general: el sol, las órbitas y el cinturón de asteroides](docs/capturas/11_orbitas.png) | ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) |
 | ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | ![Explosión de un asteroide al chocar con Duna](docs/capturas/12_explosion.png) |
-| ![Fondo: nebulosa, Vía Láctea y una galaxia espiral](docs/capturas/13_universo.png) | |
+| ![Fondo: nebulosa, Vía Láctea y una galaxia espiral](docs/capturas/13_universo.png) | ![Agujero negro con disco de acreción y lente gravitacional](docs/capturas/14_agujero_negro.png) |
+| ![Universo alterno: Albor y Arena](docs/capturas/15_universo_alterno.png) | ![Fútbol en Arena](docs/capturas/16_futbol.png) |
+| ![Carrera de anillos en Cobalto](docs/capturas/17_anillos.png) | |
 
 ---
 
@@ -124,7 +137,9 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `--time S` | Adelanta la simulación S segundos |
 | `--dt-test` | Prueba de consistencia: el mismo vuelo simulado a 20, 30, 60, 144 y 240 FPS |
 | `--screenshot archivo.png` | Guarda un cuadro y termina (se combina con las opciones siguientes) |
-| `--fly "w:3,wa:2"` | Antes de la captura, simula un vuelo: teclas `w s a d q e`, `i`/`k` = flechas, `b` boost, `x` freno |
+| `--fly "w:3,wa:2"` | Antes de la captura, simula un vuelo: teclas `w s a d q e`, `i`/`k` = flechas, `b` boost, `x` freno. En el universo alterno, `z` pone el balón delante del carro y `g` pone el carro frente al siguiente anillo |
+| `--alt` | Empieza en el universo alterno (`--near 1` = Arena, `--near 2` = Cobalto) |
+| `--hole` | Empieza junto al agujero negro, mirándolo (como la tecla `J`) |
 | `--look yaw pitch` | Gira la cámara alrededor del carro (grados) en la captura |
 | `--zoom D` | Distancia de la cámara al carro en la captura |
 
@@ -153,6 +168,7 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `L` | Activar o desactivar el nivel de detalle automático |
 | `B` | Activar o desactivar el descarte de caras traseras |
 | `H` | Mostrar u ocultar la ayuda de controles |
+| `J` | Ir junto al agujero negro del universo actual (para no tener que volar hasta él) |
 | `R` | Volver al punto de inicio (también reaparece al instante si el carro explotó) |
 | `P` | Guardar una captura en `captura.png` |
 | `Esc` | Salir |
@@ -193,6 +209,16 @@ Duración sugerida: unos 2 minutos. Todo ocurre en la misma escena.
 | 1:35–1:50 | Mantener `↑` hasta salir del modo superficie y luego `Shift` | **Alejamiento**: el planeta vuelve a verse como un cuerpo del sistema |
 | 1:50–2:00 | Pulsar `O` y `L` mirando los contadores | El descarte de objetos y el LOD cambian el trabajo del renderizador |
 
+Agujero negro y minijuegos (después del recorrido anterior):
+
+| Qué hacer | Qué se muestra |
+|---|---|
+| Subir con `↑` desde el sol (o pulsar `J`) | El agujero negro: disco de acreción y la lente que dobla el fondo y la parte de atrás del disco |
+| Entrar con `W` al centro negro | Destello y llegada al **universo alterno**: Albor, Arena y Cobalto con otro cielo |
+| Bajar a Arena y empujar el balón hacia el polo sur | Fútbol: golpes, rebotes, marcador y festejo de gol |
+| Bajar a Cobalto y cruzar el anillo dorado | Carrera de anillos con reloj y mejor tiempo |
+| Subir hasta *Regreso* (o `J`) y entrar | Vuelta al sistema solar normal |
+
 Opcional: pasar por el cinturón de asteroides (entre Glacia y Vergel) y chocar rocas con boost
 hacia un planeta para ver la explosión. Visitar los demás planetas. En Glacia las grietas brillan más en el lado de noche, en
 Vergel se mueven las nubes, en Aurelia las bandas se deslizan entre sí y la sombra del planeta cruza
@@ -230,6 +256,9 @@ src/
   boost_flame.*       Llama de cohete del boost (escapes del Fennec)
   particles.*         Partículas de fuego y humo (estela del boost y explosiones)
   asteroids.*         Cinturón de asteroides: órbitas, choques con el carro y explosiones
+  blackhole.*         Agujero negro: horizonte, disco de acreción y lente gravitacional
+  alternate.cpp       Universo alterno: Albor, Arena, Cobalto, su cielo y sus shaders
+  minigames.*         Fútbol en Arena y carrera de anillos en Cobalto
   mesh_builder.h      Ayudante para construir modelos en código con caras planas
 ```
 
@@ -281,6 +310,12 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `asteroidShader` | Asteroides | Lambert con luz del sol, luz ambiente y un borde tenue para distinguirlos del fondo |
 | `flameShader` | Llama del boost | Emisiva. **Núcleo caliente** donde se mira a través de más fuego (centro de la silueta o a lo largo del eje), naranja en los bordes y rojo en la punta; pulsos que viajan hacia atrás con el tiempo |
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
+| `diskShader` (**animado**) | Disco de acreción | Gas que gira más rápido cerca del centro (Kepler), blanco por dentro y del color del disco por fuera, **efecto Doppler** (el lado que se acerca brilla más); mezcla aditiva |
+| `horizonShader` | Horizonte de eventos | Negro, con el **anillo de fotones** brillando en el borde |
+| `whiteStarShader` (**animado**) | Albor | Mismos gránulos que el sol con una paleta de azul a blanco |
+| `arenaShader` | Cancha | Césped en franjas y líneas horneadas; luz ambiente fuerte (como lámparas de estadio) para jugar también de noche |
+| `cobaltShader` | Cobalto | Roca azul marmoleada con vetas cian que pulsan con el tiempo |
+| `ballShader` | Balón | 12 manchas negras alrededor de los vértices del icosaedro, leídas en espacio local para que giren cuando rueda |
 
 ### Fondo del universo ([skybox.cpp](src/skybox.cpp))
 
@@ -322,6 +357,39 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
   que se mueven junto con el planeta. A los 8 s la roca reaparece en el cinturón.
 - **Dibujo eficiente:** las rocas visibles se juntan en una sola malla por cuadro; las que no se ven
   se descartan y las muy lejanas se dibujan como un punto.
+
+### Agujero negro ([blackhole.cpp](src/blackhole.cpp))
+
+- Está quieto en `(0, 650, 0)`, muy por encima del plano de las órbitas. Su etiqueta aparece al
+  mirar hacia arriba; `J` lleva junto a él.
+- **Gravedad:** atrae como los planetas (inversa del cuadrado) con alcance de 7 radios, pero no se
+  puede tocar: el carro lo atraviesa. Al cruzar el horizonte la pantalla se pone blanca, y a la
+  mitad del destello se cambia de universo.
+- **Dibujo en tres pasos**, después de todo lo que está detrás de él:
+  1. La mitad de atrás del **disco de acreción**, con mezcla aditiva y sin escribir profundidad.
+  2. La **lente gravitacional**, en espacio de pantalla: un píxel a distancia `r` del centro
+     muestra lo que está a `r − E²/r` (`E` = radio de Einstein). Cerca de `E` el fondo de detrás se
+     estira en un anillo y más adentro aparece la imagen del otro lado. Solo se doblan los píxeles
+     más lejanos que el agujero (se usa el buffer de profundidad), así que el disco de atrás se ve
+     como un arco por encima y por debajo del horizonte. Luego se dibuja el **horizonte** negro.
+  3. La mitad de adelante del disco, que pasa entre la cámara y el agujero y no se dobla. Cerca del
+     corte las dos mitades se mezclan poco a poco para que no se note la línea.
+
+### Universo alterno y minijuegos ([alternate.cpp](src/alternate.cpp), [minigames.cpp](src/minigames.cpp))
+
+- Es otra `Scene` con su estrella, sus planetas, sus estrellas de fondo y un cielo con otra paleta
+  (Vía Láctea dorada, nebulosas doradas, rojas y cian). Se **hornea en otro hilo** mientras se juega
+  en el universo normal, así el arranque no tarda más.
+- Arena y Cobalto no giran sobre su eje, así que el balón, las porterías y los anillos se guardan
+  relativos al centro del planeta y solo se les suma su posición en la órbita.
+- **Fútbol en Arena:** el carro vuela a 1.7 de altura (cada planeta puede tener su altitud de
+  crucero) y la cámara baja para ver hacia adelante. El balón cae hacia el centro del planeta,
+  rebota, rueda con fricción y gira según lo que avanza. El golpe es esfera contra esfera con la
+  velocidad relativa del carro, más un empujón extra. Si el balón entra al círculo de un polo es
+  gol: festejo con partículas, marcador y saque desde el ecuador.
+- **Carrera de anillos en Cobalto:** 14 anillos sobre un camino que sube y baja de latitud, cada uno
+  a otra altura (hay que usar `↑`/`↓`). El reloj empieza en el primero; el siguiente es dorado. Se
+  guarda el mejor tiempo.
 
 ### Boost: llama de cohete y estela ([boost_flame.cpp](src/boost_flame.cpp))
 
@@ -398,7 +466,11 @@ altura del terreno) que gira con el planeta.
 - **Distribución de objetos:** misma semilla, imagen idéntica; otra semilla, posiciones distintas.
 - **Vuelos simulados:** acercamiento, vuelta completa alrededor de un planeta, choque con boost
   sin atravesarlo, salida subiendo o con `F`, y desvío por gravedad (con y sin `V`).
-- **Rendimiento** (i5-10500H, 12 hilos): entre 7 y 15 ms por cuadro según la vista.
+- **Agujero negro:** viaje de ida y vuelta entre los dos universos con vuelos simulados.
+- **Minijuegos:** golpe al balón (sale volando y cuenta el toque) y una vuelta completa a los 14
+  anillos con su tiempo.
+- **Rendimiento** (i5-10500H, 12 hilos): entre 7 y 15 ms por cuadro según la vista; hasta ~24 ms
+  con el agujero negro llenando la pantalla.
 
 ## Limitaciones conocidas
 
@@ -410,6 +482,10 @@ altura del terreno) que gira con el planeta.
 - Solo se probó en Windows 11 con MSYS2 UCRT64. El código no depende de Windows salvo la copia de
   `SDL2.dll`, pero no se probó en otros sistemas.
 - La captura con `P` se guarda como PNG sin compresión (~1.5 MB).
+- La lente del agujero negro trabaja con la imagen ya dibujada: no puede mostrar lo que está fuera
+  de la pantalla, así que cerca de los bordes repite los píxeles de la orilla.
+- El balón no choca con los postes de las porterías; el marcador y el mejor tiempo no se guardan al
+  cerrar el programa.
 
 ## Regenerar el modelo del carro
 
