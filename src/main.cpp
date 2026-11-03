@@ -19,6 +19,7 @@
 #include "boost_flame.h"
 #include "particles.h"
 #include "minigames.h"
+#include "openworld.h"
 
 // Resolucion interna del framebuffer. La ventana es mas grande y SDL solo
 // estira la imagen ya terminada al mostrarla.
@@ -41,6 +42,9 @@ const float RESPAWN_DELAY = 3.0f;
 // Duracion del viaje por el agujero negro: a la mitad (con la pantalla en
 // blanco) se cambia de universo.
 const float WARP_TIME = 2.4f;
+
+// Duracion del destello al aterrizar en Arena (o al despegar de su mundo abierto).
+const float LAND_TIME = 1.6f;
 
 // Cinturon de asteroides: cuantas rocas y con que semilla se reparten.
 const int ASTEROID_COUNT = 220;
@@ -81,8 +85,9 @@ bool loadCar(const std::string& path, Mesh& mesh) {
 // Convierte una cadena de teclas simuladas ("wa", "wb", ...) en entrada.
 // Solo se usa para pruebas sin ventana: w s a d q e, i/k = flechas arriba/abajo,
 // b = boost, x = freno fuerte. En el guion de vuelo, f cambia el modo superficie,
-// v la gravedad, z pone el balon de Arena delante del carro y g pone el carro
-// frente al siguiente anillo de Cobalto.
+// v la gravedad y g pone el carro frente al siguiente anillo de Cobalto. En el
+// mundo abierto de Arena, x (Espacio) es saltar, c cambia a la camara al balon
+// y u despega.
 ShipInput inputFromString(const std::string& keys) {
     ShipInput in;
     for (char k : keys) {
@@ -228,6 +233,8 @@ int main(int argc, char* argv[]) {
     //   --dt-test                 prueba de consistencia con distintos FPS
     //   --alt                     empieza en el universo alterno
     //   --hole                    empieza junto al agujero negro, mirandolo (como la tecla J)
+    //   --arena                   empieza en el mundo abierto de Arena (afuera del estadio)
+    //   --kickoff                 con --arena: empieza en el saque, dentro del estadio
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f, zoom = 0.0f;
     std::string flightScript;
@@ -241,7 +248,7 @@ int main(int argc, char* argv[]) {
     bool showOrbits = true;     // tecla T: lineas de las orbitas de los planetas
     bool showTrajectory = true; // tecla Y: puntos de la trayectoria prevista del carro
     bool noNormalMap = false;
-    bool startAlt = false, startAtHole = false;
+    bool startAlt = false, startAtHole = false, startArena = false, startKickoff = false;
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
@@ -264,6 +271,8 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--dt-test") == 0) dtTest = true;
         else if (std::strcmp(argv[i], "--alt") == 0) startAlt = true;
         else if (std::strcmp(argv[i], "--hole") == 0) startAtHole = true;
+        else if (std::strcmp(argv[i], "--arena") == 0) startAlt = startArena = true;
+        else if (std::strcmp(argv[i], "--kickoff") == 0) startKickoff = true;
     }
 
     // Construir la escena incluye hornear las superficies del sol y Duna.
@@ -283,21 +292,24 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // El universo alterno se hornea en otro hilo mientras se juega en el
-    // normal; se espera a que termine solo al cruzar el agujero negro. Al
-    // salir del programa tambien se espera (el destructor lo une).
+    // El universo alterno (y el mundo abierto de Arena) se construye en otro
+    // hilo mientras se juega en el normal; se espera a que termine solo al
+    // cruzar el agujero negro. Al salir del programa tambien se espera (el
+    // destructor lo une).
     Scene altScene;
+    OpenWorld arenaWorld;
     struct Joiner {
         std::thread thread;
         ~Joiner() { if (thread.joinable()) thread.join(); }
-    } altBuilder{std::thread([&altScene]() { altScene.buildAlternate(); })};
-    SoccerGame soccer;
+    } altBuilder{std::thread([&altScene, &arenaWorld]() {
+        altScene.buildAlternate();
+        arenaWorld.build(2026);
+    })};
     RingRace race;
     bool altReady = false;
     auto ensureAlt = [&]() {
         if (altReady) return;
         altBuilder.thread.join();
-        soccer.build(altScene.bodies[ALT_ARENA].radius);
         race.build(altScene.bodies[ALT_COBALT].radius);
         altReady = true;
     };
@@ -317,8 +329,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     const float carRadius = carFull.boundingRadius();
+    // El rival del mundo abierto: el mismo Fennec pintado de naranja.
+    Mesh orangeFull = carFull, orangeLod = carLod;
+    for (Mesh* m : {&orangeFull, &orangeLod})
+        for (Material& mat : m->materials)
+            if (mat.name == "Fennec - Body") mat.color = Vec3{1.0f, 0.4f, 0.05f};
     // Llama del boost (sale de los escapes del Fennec).
     const Mesh boostFlame = makeFlame({1.0f, 0.45f, 0.08f});
+    const CarAssets carAssets{{&carFull, &carLod}, {&orangeFull, &orangeLod}, &boostFlame};
     bool carUsesLod = false;
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
@@ -376,7 +394,6 @@ int main(int argc, char* argv[]) {
         if (scene == &homeScene) {
             belt.update(elapsed, step, colliders, particles);
         } else {
-            soccer.update(step, ship, altScene.bodies[ALT_ARENA], elapsed, particles);
             race.update(step, ship, altScene.bodies[ALT_COBALT], elapsed);
         }
         if (ship.boosting && !ship.crashed) {
@@ -460,15 +477,73 @@ int main(int argc, char* argv[]) {
         return true;
     };
 
+    // Aterrizar en Arena: al tocar su superficie (el modo superficie baja solo
+    // hasta 1.7) la pantalla destella y se pasa al mundo abierto. Con U se
+    // despega: el carro sale al espacio por encima de Arena. Para no volver a
+    // aterrizar de inmediato, hay que alejarse antes de poder aterrizar otra vez.
+    bool inOpenWorld = false;
+    float landTimer = 0.0f;
+    bool landSwapped = false, landing = true, landArmed = true;
+    auto startTakeOff = [&]() {
+        if (!inOpenWorld || landTimer > 0.0f) return;
+        landTimer = LAND_TIME;
+        landSwapped = false;
+        landing = false;
+    };
+    auto updateLanding = [&](float step) {
+        if (landTimer <= 0.0f) {
+            if (!scene->alternate || inOpenWorld) return;
+            bool nearArena = ship.nearest == ALT_ARENA;
+            if (!nearArena || ship.altitude > scene->bodies[ALT_ARENA].radius * 2.6f) landArmed = true;
+            if (landArmed && nearArena && ship.surfaceMode && !ship.crashed && ship.altitude < 2.2f) {
+                landTimer = LAND_TIME;
+                landSwapped = false;
+                landing = true;
+            }
+            return;
+        }
+        landTimer = std::max(0.0f, landTimer - step);
+        if (landSwapped || landTimer > LAND_TIME * 0.5f) return;
+        landSwapped = true;
+        particles.clear();
+        if (landing) {
+            inOpenWorld = true;
+            arenaWorld.enter();
+            std::printf("Aterrizaste en Arena: mundo abierto\n");
+        } else {
+            // Sale del lado de Albor, alto y alejandose del planeta.
+            inOpenWorld = false;
+            landArmed = false;
+            const CelestialBody& arena = scene->bodies[ALT_ARENA];
+            Vec3 center = arena.position(elapsed);
+            Vec3 out = normalize(scene->sunPosition(elapsed) - center);
+            ship = Ship{};
+            ship.position = center + out * (arena.radius + 40.0f);
+            ship.lookAt(ship.position + out);
+            ship.velocity = out * 15.0f;
+            camera.snapTo(ship);
+            std::printf("Despegaste de Arena\n");
+        }
+    };
+
     // Un paso de la simulacion: carro, efectos, minijuegos, agujero negro y
     // camara. Lo usan el ciclo normal y el guion de vuelo de las pruebas.
     auto simulate = [&](const ShipInput& in, float step, bool looking, float mouseDx, float mouseDy, bool respawn) {
+        if (inOpenWorld) {
+            // Mientras destella el despegue el carro ya no se controla.
+            arenaWorld.update(landTimer > 0.0f ? ShipInput{} : in, step, particles);
+            particles.update(step);
+            updateLanding(step);
+            return;
+        }
         std::vector<SphereCollider> colliders = collidersAt(*scene, elapsed);
         if (warpTimer <= 0.0f) ship.update(in, step, colliders); // dentro del agujero el carro no se controla
         updateEffects(step, colliders);
         placeCrashCamera(colliders);
         if (respawn && ship.crashed && respawnTimer <= 0.0f) respawnShip(); // reaparece en el punto de inicio
         if (updateWarp(step)) colliders = collidersAt(*scene, elapsed);
+        updateLanding(step);
+        if (inOpenWorld) return;
         // En la cancha la camara va mas baja y mira al frente, para ver el balon.
         bool arenaCamera = scene->alternate && ship.nearest == ALT_ARENA;
         float k = 1.0f - std::exp(-3.0f * step);
@@ -478,6 +553,12 @@ int main(int argc, char* argv[]) {
         if (!ship.crashed) camera.update(ship, step, looking, mouseDx, mouseDy);
         camera.keepOutside(colliders);
     };
+
+    if (startArena) {
+        inOpenWorld = true;
+        arenaWorld.enter();
+        if (startKickoff) arenaWorld.placeAtKickoff();
+    }
 
     // Modo de prueba: simula el guion de vuelo a 60 FPS antes de la captura
     // e imprime la altitud al final de cada tramo, y cuantos grados ha
@@ -491,13 +572,10 @@ int main(int argc, char* argv[]) {
             lastInput = in;
             if (seg.first.find('f') != std::string::npos) ship.surfaceEnabled = !ship.surfaceEnabled;
             if (seg.first.find('v') != std::string::npos) ship.gravityEnabled = !ship.gravityEnabled;
+            if (seg.first.find('u') != std::string::npos) startTakeOff();
+            if (seg.first.find('c') != std::string::npos) arenaWorld.ballCamera = !arenaWorld.ballCamera;
             if (seg.first.find('g') != std::string::npos && scene->alternate) {
                 race.placeShipForTest(ship, scene->bodies[ALT_COBALT].position(elapsed));
-            }
-            if (seg.first.find('z') != std::string::npos && scene->alternate) {
-                Vec3 center = scene->bodies[ALT_ARENA].position(elapsed);
-                Vec3 ahead = ship.position + ship.forward * 9.0f - center;
-                soccer.placeBallForTest(normalize(ahead) * (scene->bodies[ALT_ARENA].radius + 2.2f));
             }
             int frames = (int)(seg.second * 60.0f + 0.5f);
             for (int i = 0; i < frames; ++i) {
@@ -514,12 +592,16 @@ int main(int argc, char* argv[]) {
                         length(ship.velocity),
                         ship.crashed ? "EXPLOTO" : (ship.surfaceMode ? "superficie" : "libre"), degreesAround,
                         belt.flying(), belt.explosions());
-            if (scene->alternate) {
-                Vec3 ball = soccer.ballPosition();
-                std::printf("         balon: %d toques, altura %.2f, %.0f grados del polo norte | marcador %d - %d\n",
-                            soccer.ballTouches(), length(ball) - scene->bodies[ALT_ARENA].radius,
-                            std::acos(clampf(normalize(ball).y, -1.0f, 1.0f)) * 180.0f / PI, soccer.blueScore,
-                            soccer.orangeScore);
+            if (inOpenWorld) {
+                const GroundCar& c = arenaWorld.player();
+                Vec3 ball = arenaWorld.ballPosition();
+                std::printf("         mundo abierto: carro (%.1f, %.2f, %.1f) vel %.1f boost %.0f %s | balon (%.1f, %.2f, %.1f)"
+                            " toques %d | rival (%.1f, %.1f) | marcador %d - %d\n",
+                            c.position.x, c.position.y, c.position.z, length(c.velocity), c.boost,
+                            arenaWorld.playerInStadium() ? "en el estadio" : "afuera", ball.x, ball.y, ball.z,
+                            arenaWorld.ballTouches(), arenaWorld.opponent().position.x, arenaWorld.opponent().position.z,
+                            arenaWorld.blueScore(), arenaWorld.orangeScore());
+            } else if (scene->alternate) {
                 std::printf("         anillos: siguiente %d, mejor tiempo %.2f\n", race.nextGate(), race.bestTime());
             }
         }
@@ -586,12 +668,21 @@ int main(int argc, char* argv[]) {
                         break;
                     case SDLK_f: ship.surfaceEnabled = !ship.surfaceEnabled; break;
                     case SDLK_b: u.cullBackFaces = !u.cullBackFaces; break;
+                    case SDLK_u: startTakeOff(); break;
+                    case SDLK_c: arenaWorld.ballCamera = !arenaWorld.ballCamera; break;
+                    case SDLK_RETURN:
+                        if (inOpenWorld) arenaWorld.restartMatch();
+                        break;
                     case SDLK_r:
+                        if (inOpenWorld) {
+                            arenaWorld.respawn();
+                            break;
+                        }
                         respawnShip();
                         camera.keepOutside(collidersAt(*scene, elapsed));
                         break;
                     case SDLK_j: // junto al agujero negro de este universo, mirandolo
-                        if (warpTimer <= 0.0f) {
+                        if (warpTimer <= 0.0f && !inOpenWorld) {
                             respawnShip();
                             ship = makeHoleViewShip(*scene, elapsed);
                             camera.snapTo(ship);
@@ -610,127 +701,148 @@ int main(int argc, char* argv[]) {
             simulate(lastInput, dt, looking, mouseDx, mouseDy, true);
         }
 
-        u.cameraPos = camera.eye;
-        u.view = camera.view();
         u.time = elapsed;
-        u.lightPos = scene->sunPosition(elapsed);
-
         Uint64 frameStart = SDL_GetPerformanceCounter();
         fb.clear();
         stats.reset();
-        scene->skybox.draw(fb, u); // nebulosas, galaxias y Via Lactea de fondo
-        scene->drawStars(fb, u);
-        scene->drawBodies(fb, u, stats, opt);
-        if (scene->alternate) {
-            soccer.draw(fb, u, stats, scene->bodies[ALT_ARENA]);
-            race.draw(fb, u, stats, scene->bodies[ALT_COBALT]);
-        }
-        if (showOrbits) scene->drawOrbits(fb, u);
-        if (scene == &homeScene) belt.draw(fb, u, stats, opt);
-        // Al final del fondo: su lente dobla lo que ya esta dibujado detras.
-        scene->drawBlackHoles(fb, u, stats, opt);
-
-        // El carro tambien pasa por el descarte y el nivel de detalle: si
-        // se ve pequeno (camara lejos) basta con el modelo reducido.
-        if (ship.crashed) {
-            // destruido: no se dibuja el carro
-        } else if (!opt.cullObjects || sphereInFrustum(u, ship.position, carRadius)) {
-            stats.objectsDrawn++;
-            carUsesLod = opt.autoLod && projectedRadius(u, ship.position, carRadius, RENDER_HEIGHT) < CAR_LOD_PIXELS;
-            u.model = ship.modelMatrix();
-            drawMesh(fb, carUsesLod ? carLod : carFull, u, carShader, stats);
-            // Boost como en Rocket League: una llama sale de cada escape del
-            // carro. El cono se coloca en el escape, con la matriz del carro,
-            // y su largo oscila con el tiempo.
-            if (ship.boosting) {
-                float length = 0.75f + 0.2f * std::sin(elapsed * 31.0f);
-                for (const Vec3& exhaust : {EXHAUST_LEFT, EXHAUST_RIGHT}) {
-                    u.model = ship.modelMatrix() * translate(exhaust) *
-                              scale3({EXHAUST_RADIUS, EXHAUST_RADIUS, length});
-                    drawMesh(fb, boostFlame, u, flameShader, stats);
-                }
-            }
-        } else {
-            stats.objectsCulled++;
-        }
-
-        // Trayectoria prevista: una copia del carro avanza 3 s con las mismas
-        // teclas; cada punto marca donde estara. Con gravedad se ve como la
-        // curvan los planetas y el sol.
-        if (showTrajectory && ship.gravityEnabled && !ship.surfaceMode && !ship.crashed) {
-            Ship ghost = ship;
-            std::vector<SphereCollider> colliders = collidersAt(*scene, elapsed);
-            for (int i = 1; i <= 30; ++i) {
-                ghost.update(lastInput, 0.1f, colliders);
-                if (ghost.surfaceMode) break;
-                uint32_t g = (uint32_t)(255 - i * 6);
-                drawPoint3D(fb, u, ghost.position, 0xFF000000u | (g / 3 << 16) | (g << 8) | g, i < 10 ? 3 : 2);
-            }
-        }
-
-        // Etiquetas con el nombre y la distancia encima de cada cuerpo que se
-        // ve (si no esta tan cerca que ocupe toda la pantalla).
-        for (const CelestialBody& b : scene->bodies) {
-            if (b.currentLod < 0) continue; // descartado: no esta en la vista
-            Vec3 center = b.position(elapsed);
-            Vec4 c = u.projection * u.view * Vec4(center, 1.0f);
-            float r = projectedRadius(u, center, b.radius, RENDER_HEIGHT);
-            float dist = length(center - ship.position);
-            if (c.w <= 0.0f || r > 220.0f || dist < b.radius * 3.0f) continue;
-            int sx = (int)((c.x / c.w * 0.5f + 0.5f) * RENDER_WIDTH);
-            int sy = (int)((1.0f - (c.y / c.w * 0.5f + 0.5f)) * RENDER_HEIGHT - r) - 14;
-            char label[64];
-            std::snprintf(label, sizeof(label), "%s %.0f", b.name.c_str(), dist);
-            drawText(fb, sx - textWidth(label) / 2, sy, label, 0xFFD8E0F0);
-        }
-
-        // Las particulas (estela y explosiones) se dibujan despues de toda la
-        // escena 3D (usan su profundidad para que los planetas las tapen) y
-        // antes del HUD.
-        particles.draw(fb, u);
-
-        // HUD con texto: navegacion, contadores del renderizador y ayuda.
-        float speed = length(ship.velocity);
         if (!screenshotPath && !helpTouched && helpTimer > 0.0f) {
             helpTimer -= dt;
             if (helpTimer <= 0.0f) showHelp = false;
         }
-        HudInfo hud;
         // En modo captura no hay tiempo real: se estiman los FPS con el render.
-        hud.fps = screenshotPath ? (lastFrameMs > 0.0f ? 1000.0f / lastFrameMs : 0.0f) : displayedFps;
-        hud.frameMs = lastFrameMs;
-        hud.speed = speed;
-        hud.maxSpeed = ship.tuning.maxBoostSpeed;
-        hud.boostFraction = ship.boostFuel / ship.tuning.boostCapacity;
-        hud.boosting = ship.boosting;
-        hud.nearName = ship.nearest >= 0 ? scene->bodies[ship.nearest].name : "-";
-        hud.altitude = ship.altitude;
-        hud.surfaceMode = ship.surfaceMode;
-        hud.surfaceEnabled = ship.surfaceEnabled;
-        hud.gravity = ship.gravityEnabled;
-        hud.relief = scene->deformTerrain;
-        hud.normalMapping = u.normalMapping;
-        hud.asteroids = belt.total();
-        hud.asteroidsFlying = belt.flying();
-        hud.explosions = belt.explosions();
-        hud.opt = opt;
-        hud.stats = stats;
-        hud.seed = scene->propSeed;
-        hud.showHelp = showHelp;
-        hud.alternate = scene->alternate;
-        drawHud(fb, hud);
-        // Panel del minijuego al acercarse a su planeta.
-        if (scene->alternate && !ship.crashed && ship.nearest >= 0) {
-            bool close = ship.altitude < scene->bodies[ship.nearest].radius * 1.5f;
-            if (ship.nearest == ALT_ARENA && close) soccer.drawHud(fb, ship.surfaceMode);
-            if (ship.nearest == ALT_COBALT && close) race.drawHud(fb, ship.surfaceMode);
+        float shownFps = screenshotPath ? (lastFrameMs > 0.0f ? 1000.0f / lastFrameMs : 0.0f) : displayedFps;
+
+        if (inOpenWorld) {
+            u.cameraPos = arenaWorld.eye;
+            u.view = lookAt(arenaWorld.eye, arenaWorld.target, Vec3{0, 1, 0});
+            arenaWorld.draw(fb, u, stats, carAssets, elapsed);
+            particles.draw(fb, u);
+            arenaWorld.drawHud(fb, shownFps, lastFrameMs, stats, showHelp);
+        } else {
+            u.cameraPos = camera.eye;
+            u.view = camera.view();
+            u.lightPos = scene->sunPosition(elapsed);
+            scene->skybox.draw(fb, u); // nebulosas, galaxias y Via Lactea de fondo
+            scene->drawStars(fb, u);
+            scene->drawBodies(fb, u, stats, opt);
+            if (scene->alternate) race.draw(fb, u, stats, scene->bodies[ALT_COBALT]);
+            if (showOrbits) scene->drawOrbits(fb, u);
+            if (scene == &homeScene) belt.draw(fb, u, stats, opt);
+            // Al final del fondo: su lente dobla lo que ya esta dibujado detras.
+            scene->drawBlackHoles(fb, u, stats, opt);
+
+            // El carro tambien pasa por el descarte y el nivel de detalle: si
+            // se ve pequeno (camara lejos) basta con el modelo reducido.
+            if (ship.crashed) {
+                // destruido: no se dibuja el carro
+            } else if (!opt.cullObjects || sphereInFrustum(u, ship.position, carRadius)) {
+                stats.objectsDrawn++;
+                carUsesLod = opt.autoLod && projectedRadius(u, ship.position, carRadius, RENDER_HEIGHT) < CAR_LOD_PIXELS;
+                u.model = ship.modelMatrix();
+                drawMesh(fb, carUsesLod ? carLod : carFull, u, carShader, stats);
+                // Boost como en Rocket League: una llama sale de cada escape del
+                // carro. El cono se coloca en el escape, con la matriz del carro,
+                // y su largo oscila con el tiempo.
+                if (ship.boosting) {
+                    float length = 0.75f + 0.2f * std::sin(elapsed * 31.0f);
+                    for (const Vec3& exhaust : {EXHAUST_LEFT, EXHAUST_RIGHT}) {
+                        u.model = ship.modelMatrix() * translate(exhaust) *
+                                  scale3({EXHAUST_RADIUS, EXHAUST_RADIUS, length});
+                        drawMesh(fb, boostFlame, u, flameShader, stats);
+                    }
+                }
+            } else {
+                stats.objectsCulled++;
+            }
+
+            // Trayectoria prevista: una copia del carro avanza 3 s con las mismas
+            // teclas; cada punto marca donde estara. Con gravedad se ve como la
+            // curvan los planetas y el sol.
+            if (showTrajectory && ship.gravityEnabled && !ship.surfaceMode && !ship.crashed) {
+                Ship ghost = ship;
+                std::vector<SphereCollider> colliders = collidersAt(*scene, elapsed);
+                for (int i = 1; i <= 30; ++i) {
+                    ghost.update(lastInput, 0.1f, colliders);
+                    if (ghost.surfaceMode) break;
+                    uint32_t g = (uint32_t)(255 - i * 6);
+                    drawPoint3D(fb, u, ghost.position, 0xFF000000u | (g / 3 << 16) | (g << 8) | g, i < 10 ? 3 : 2);
+                }
+            }
+
+            // Etiquetas con el nombre y la distancia encima de cada cuerpo que se
+            // ve (si no esta tan cerca que ocupe toda la pantalla).
+            for (const CelestialBody& b : scene->bodies) {
+                if (b.currentLod < 0) continue; // descartado: no esta en la vista
+                Vec3 center = b.position(elapsed);
+                Vec4 c = u.projection * u.view * Vec4(center, 1.0f);
+                float r = projectedRadius(u, center, b.radius, RENDER_HEIGHT);
+                float dist = length(center - ship.position);
+                if (c.w <= 0.0f || r > 220.0f || dist < b.radius * 3.0f) continue;
+                int sx = (int)((c.x / c.w * 0.5f + 0.5f) * RENDER_WIDTH);
+                int sy = (int)((1.0f - (c.y / c.w * 0.5f + 0.5f)) * RENDER_HEIGHT - r) - 14;
+                char label[64];
+                std::snprintf(label, sizeof(label), "%s %.0f", b.name.c_str(), dist);
+                drawText(fb, sx - textWidth(label) / 2, sy, label, 0xFFD8E0F0);
+            }
+
+            // Las particulas (estela y explosiones) se dibujan despues de toda la
+            // escena 3D (usan su profundidad para que los planetas las tapen) y
+            // antes del HUD.
+            particles.draw(fb, u);
+
+            // HUD con texto: navegacion, contadores del renderizador y ayuda.
+            HudInfo hud;
+            hud.fps = shownFps;
+            hud.frameMs = lastFrameMs;
+            hud.speed = length(ship.velocity);
+            hud.maxSpeed = ship.tuning.maxBoostSpeed;
+            hud.boostFraction = ship.boostFuel / ship.tuning.boostCapacity;
+            hud.boosting = ship.boosting;
+            hud.nearName = ship.nearest >= 0 ? scene->bodies[ship.nearest].name : "-";
+            hud.altitude = ship.altitude;
+            hud.surfaceMode = ship.surfaceMode;
+            hud.surfaceEnabled = ship.surfaceEnabled;
+            hud.gravity = ship.gravityEnabled;
+            hud.relief = scene->deformTerrain;
+            hud.normalMapping = u.normalMapping;
+            hud.asteroids = belt.total();
+            hud.asteroidsFlying = belt.flying();
+            hud.explosions = belt.explosions();
+            hud.opt = opt;
+            hud.stats = stats;
+            hud.seed = scene->propSeed;
+            hud.showHelp = showHelp;
+            hud.alternate = scene->alternate;
+            drawHud(fb, hud);
+            // Panel del minijuego al acercarse a su planeta.
+            if (scene->alternate && !ship.crashed && ship.nearest >= 0) {
+                bool close = ship.altitude < scene->bodies[ship.nearest].radius * 1.5f;
+                if (ship.nearest == ALT_ARENA && close) {
+                    const char* msg = ship.surfaceMode ? "ATERRIZANDO EN ARENA..." : "BAJA A ARENA PARA ENTRAR A SU MUNDO ABIERTO";
+                    darkenRect(fb, (RENDER_WIDTH - 320) / 2, 8, 320, 30, 0.55f);
+                    drawText(fb, (RENDER_WIDTH - textWidth("ARENA - ESTADIO DE FUTBOL")) / 2, 12, "ARENA - ESTADIO DE FUTBOL", 0xFF98A2B8);
+                    drawText(fb, (RENDER_WIDTH - textWidth(msg)) / 2, 25, msg, 0xFFFFD860);
+                }
+                if (ship.nearest == ALT_COBALT && close) race.drawHud(fb, ship.surfaceMode);
+            }
+            if (ship.crashed) {
+                const char* msg = "EL CARRO EXPLOTO";
+                drawText(fb, (RENDER_WIDTH - textWidth(msg, 3)) / 2, RENDER_HEIGHT / 2 - 40, msg, 0xFFFF8040, 3);
+                char sub[64];
+                std::snprintf(sub, sizeof(sub), "REAPARECE EN %.0f  (R: AHORA)", std::max(0.0f, std::ceil(respawnTimer)));
+                drawText(fb, (RENDER_WIDTH - textWidth(sub, 2)) / 2, RENDER_HEIGHT / 2, sub, 0xFFE8ECF4, 2);
+            }
         }
-        if (ship.crashed) {
-            const char* msg = "EL CARRO EXPLOTO";
-            drawText(fb, (RENDER_WIDTH - textWidth(msg, 3)) / 2, RENDER_HEIGHT / 2 - 40, msg, 0xFFFF8040, 3);
-            char sub[64];
-            std::snprintf(sub, sizeof(sub), "REAPARECE EN %.0f  (R: AHORA)", std::max(0.0f, std::ceil(respawnTimer)));
-            drawText(fb, (RENDER_WIDTH - textWidth(sub, 2)) / 2, RENDER_HEIGHT / 2, sub, 0xFFE8ECF4, 2);
+        // Aterrizaje o despegue de Arena: destello verde claro.
+        if (landTimer > 0.0f) {
+            float half = LAND_TIME * 0.5f;
+            float phase = 1.0f - std::fabs(landTimer - half) / half;
+            tintScreen(fb, Vec3{0.9f, 1.0f, 0.92f}, phase * phase * (3.0f - 2.0f * phase));
+            if (phase > 0.35f) {
+                const char* msg = landing ? (landSwapped ? "MUNDO ABIERTO DE ARENA" : "ATERRIZANDO")
+                                          : (landSwapped ? "DE VUELTA EN EL ESPACIO" : "DESPEGANDO");
+                drawText(fb, (RENDER_WIDTH - textWidth(msg, 3)) / 2, RENDER_HEIGHT / 2 - 12, msg, 0xFF204030, 3);
+            }
         }
         // Viaje por el agujero negro: la pantalla se pone blanca y vuelve.
         if (warpTimer > 0.0f) {
@@ -765,6 +877,7 @@ int main(int argc, char* argv[]) {
         if (titleTimer >= 0.5f) {
             displayedFps = framesCounted / titleTimer;
             char title[320];
+            float speed = length(ship.velocity);
             const char* nearName = ship.nearest >= 0 ? scene->bodies[ship.nearest].name.c_str() : "-";
             std::snprintf(title, sizeof(title),
                           "Proyecto 3 - Galaxia%s | %.0f FPS | vel %.1f | boost %.0f%% | %s a %.1f%s | "
@@ -775,6 +888,14 @@ int main(int argc, char* argv[]) {
                           stats.objectsCulled, stats.propsDrawn, scene->propSeed, stats.trianglesIn,
                           stats.trianglesDrawn, opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no",
                           scene->deformTerrain ? "si" : "no", ship.gravityEnabled ? "si" : "no");
+            if (inOpenWorld) {
+                std::snprintf(title, sizeof(title),
+                              "Proyecto 3 - Galaxia (mundo abierto de Arena) | %.0f FPS | azul %d - %d naranja | "
+                              "vel %.1f | boost %.0f | tris %d / raster %d",
+                              framesCounted / titleTimer, arenaWorld.blueScore(), arenaWorld.orangeScore(),
+                              length(arenaWorld.player().velocity), arenaWorld.player().boost, stats.trianglesIn,
+                              stats.trianglesDrawn);
+            }
             SDL_SetWindowTitle(window, title);
             titleTimer = 0.0f;
             framesCounted = 0;

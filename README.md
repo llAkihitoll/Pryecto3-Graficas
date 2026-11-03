@@ -29,12 +29,12 @@ El carro puede viajar entre ellos, acercarse, rodearlos en **modo superficie** y
 sin pantallas de carga ni cambios de escena.
 
 Muy por encima del sol hay un **agujero negro** con disco de acreción y **lente gravitacional**.
-Cruzar su horizonte lleva a un **universo alterno** con una estrella blanca, *Albor*, y dos
-planetas con **minijuego**:
+Cruzar su horizonte lleva a un **universo alterno** con una estrella blanca gigante, *Albor*, y
+dos planetas con **minijuego**:
 
 | Planeta | Minijuego |
 |---|---|
-| **Arena** | **Fútbol como en Rocket League** sobre el planeta: el balón tiene física propia, la portería azul está en el polo norte y la naranja en el sur |
+| **Arena** | Un **balón de Rocket League gigante**. Al aterrizar se entra a un **mundo abierto**: colinas, bosques, rocas y montañas, y en el centro un **estadio como el de Rocket League** donde se juega un partido de 3 minutos contra un rival naranja que maneja la computadora |
 | **Cobalto** | **Carrera de anillos** contra reloj: 14 anillos a distintas alturas alrededor del planeta |
 
 Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
@@ -47,7 +47,8 @@ Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
 | ![Vista general: el sol, las órbitas y el cinturón de asteroides](docs/capturas/11_orbitas.png) | ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) |
 | ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | ![Explosión de un asteroide al chocar con Duna](docs/capturas/12_explosion.png) |
 | ![Fondo: nebulosa, Vía Láctea y una galaxia espiral](docs/capturas/13_universo.png) | ![Agujero negro con disco de acreción y lente gravitacional](docs/capturas/14_agujero_negro.png) |
-| ![Universo alterno: Albor y Arena](docs/capturas/15_universo_alterno.png) | ![Fútbol en Arena](docs/capturas/16_futbol.png) |
+| ![Universo alterno: Albor y Arena](docs/capturas/15_universo_alterno.png) | ![Mundo abierto de Arena](docs/capturas/16_mundo_abierto.png) |
+| ![Arena: un balón de Rocket League gigante](docs/capturas/19_arena_balon.png) | ![Saque en el estadio con el balón de Rocket League](docs/capturas/18_estadio.png) |
 | ![Carrera de anillos en Cobalto](docs/capturas/17_anillos.png) | |
 
 ---
@@ -137,9 +138,11 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `--time S` | Adelanta la simulación S segundos |
 | `--dt-test` | Prueba de consistencia: el mismo vuelo simulado a 20, 30, 60, 144 y 240 FPS |
 | `--screenshot archivo.png` | Guarda un cuadro y termina (se combina con las opciones siguientes) |
-| `--fly "w:3,wa:2"` | Antes de la captura, simula un vuelo: teclas `w s a d q e`, `i`/`k` = flechas, `b` boost, `x` freno. En el universo alterno, `z` pone el balón delante del carro y `g` pone el carro frente al siguiente anillo |
+| `--fly "w:3,wa:2"` | Antes de la captura, simula un vuelo: teclas `w s a d q e`, `i`/`k` = flechas, `b` boost, `x` freno. En el universo alterno, `g` pone el carro frente al siguiente anillo. En el mundo abierto, `x` es saltar, `c` cambia a la cámara al balón y `u` despega |
 | `--alt` | Empieza en el universo alterno (`--near 1` = Arena, `--near 2` = Cobalto) |
 | `--hole` | Empieza junto al agujero negro, mirándolo (como la tecla `J`) |
+| `--arena` | Empieza en el mundo abierto de Arena, afuera del estadio |
+| `--kickoff` | Con `--arena`: empieza en el saque, dentro del estadio |
 | `--look yaw pitch` | Gira la cámara alrededor del carro (grados) en la captura |
 | `--zoom D` | Distancia de la cámara al carro en la captura |
 
@@ -169,6 +172,20 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `B` | Activar o desactivar el descarte de caras traseras |
 | `H` | Mostrar u ocultar la ayuda de controles |
 | `J` | Ir junto al agujero negro del universo actual (para no tener que volar hasta él) |
+
+En el **mundo abierto de Arena** los controles son los de Rocket League:
+
+| Tecla | Acción |
+|---|---|
+| `W` / `S` | Acelerar / frenar y reversa |
+| `A` / `D` | Girar |
+| `Shift` | Boost (0 a 100; los pads naranjas de la cancha lo llenan) |
+| `Espacio` | Saltar; en el aire, otra vez: **flip** hacia donde apunten `W`/`S`/`A`/`D` |
+| `↑` / `↓` | En el aire: subir o bajar la nariz (con boost se puede volar) |
+| `C` | Cámara al balón |
+| `Enter` | Empezar otro partido |
+| `R` | Volver a la entrada del estadio |
+| `U` | Despegar y volver al espacio |
 | `R` | Volver al punto de inicio (también reaparece al instante si el carro explotó) |
 | `P` | Guardar una captura en `captura.png` |
 | `Esc` | Salir |
@@ -215,7 +232,9 @@ Agujero negro y minijuegos (después del recorrido anterior):
 |---|---|
 | Subir con `↑` desde el sol (o pulsar `J`) | El agujero negro: disco de acreción y la lente que dobla el fondo y la parte de atrás del disco |
 | Entrar con `W` al centro negro | Destello y llegada al **universo alterno**: Albor, Arena y Cobalto con otro cielo |
-| Bajar a Arena y empujar el balón hacia el polo sur | Fútbol: golpes, rebotes, marcador y festejo de gol |
+| Bajar a Arena hasta tocar el suelo | Destello y llegada al **mundo abierto**: colinas, bosque y el estadio |
+| Entrar por la puerta lateral y jugar (`Espacio` salta, `C` cámara al balón) | Partido contra el rival naranja: saque, golpes, flips, pads de boost y explosión de gol |
+| Pulsar `U` | Despegue de vuelta al espacio |
 | Bajar a Cobalto y cruzar el anillo dorado | Carrera de anillos con reloj y mejor tiempo |
 | Subir hasta *Regreso* (o `J`) y entrar | Vuelta al sistema solar normal |
 
@@ -258,7 +277,9 @@ src/
   asteroids.*         Cinturón de asteroides: órbitas, choques con el carro y explosiones
   blackhole.*         Agujero negro: horizonte, disco de acreción y lente gravitacional
   alternate.cpp       Universo alterno: Albor, Arena, Cobalto, su cielo y sus shaders
-  minigames.*         Fútbol en Arena y carrera de anillos en Cobalto
+  minigames.*         Carrera de anillos en Cobalto
+  openworld.*         Mundo abierto de Arena: terreno, estadio, carro en el suelo, balón y rival
+  rlball.*            Superficie del balón de Rocket League (planeta Arena y balón del estadio)
   mesh_builder.h      Ayudante para construir modelos en código con caras planas
 ```
 
@@ -313,9 +334,12 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `diskShader` (**animado**) | Disco de acreción | Gas que gira más rápido cerca del centro (Kepler), blanco por dentro y del color del disco por fuera, **efecto Doppler** (el lado que se acerca brilla más); mezcla aditiva |
 | `horizonShader` | Horizonte de eventos | Negro, con el **anillo de fotones** brillando en el borde |
 | `whiteStarShader` (**animado**) | Albor | Mismos gránulos que el sol con una paleta de azul a blanco |
-| `arenaShader` | Cancha | Césped en franjas y líneas horneadas; luz ambiente fuerte (como lámparas de estadio) para jugar también de noche |
+| `arenaShader` | Arena: balón de Rocket League gigante | Lee la superficie del balón (ver abajo) e ilumina con Lambert, Blinn-Phong según el material (las placas brillan más que el hule) y borde Fresnel |
+| `groundShader` | Suelo del mundo abierto | La cancha (franjas, tono de cada equipo, líneas calculadas con la posición), asfalto alrededor del estadio, y pasto que pasa a roca en las pendientes y a nieve en lo alto; niebla según la distancia |
+| `worldShader` | Estadio, árboles, pads | Lambert, especular y luz propia (bordes de las paredes, lámparas, pads) con niebla |
+| `shadowShader` | Sombras | Disco con color **negativo** y mezcla aditiva: oscurece el suelo bajo el balón y los carros, más en el centro |
 | `cobaltShader` | Cobalto | Roca azul marmoleada con vetas cian que pulsan con el tiempo |
-| `ballShader` | Balón | 12 manchas negras alrededor de los vértices del icosaedro, leídas en espacio local para que giren cuando rueda |
+| `ballShader` | Balón del estadio | La misma superficie que Arena, leída en espacio local para que gire cuando rueda |
 
 ### Fondo del universo ([skybox.cpp](src/skybox.cpp))
 
@@ -380,13 +404,55 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 - Es otra `Scene` con su estrella, sus planetas, sus estrellas de fondo y un cielo con otra paleta
   (Vía Láctea dorada, nebulosas doradas, rojas y cian). Se **hornea en otro hilo** mientras se juega
   en el universo normal, así el arranque no tarda más.
-- Arena y Cobalto no giran sobre su eje, así que el balón, las porterías y los anillos se guardan
-  relativos al centro del planeta y solo se les suma su posición en la órbita.
-- **Fútbol en Arena:** el carro vuela a 1.7 de altura (cada planeta puede tener su altitud de
-  crucero) y la cámara baja para ver hacia adelante. El balón cae hacia el centro del planeta,
-  rebota, rueda con fricción y gira según lo que avanza. El golpe es esfera contra esfera con la
-  velocidad relativa del carro, más un empujón extra. Si el balón entra al círculo de un polo es
-  gol: festejo con partículas, marcador y saque desde el ecuador.
+- **Albor** tiene radio 48 (el sol normal, 30), así que las órbitas de Arena y Cobalto están más lejos.
+- Cobalto no gira sobre su eje, así que sus anillos se guardan relativos al centro del planeta y
+  solo se les suma su posición en la órbita.
+
+### Balón de Rocket League ([rlball.cpp](src/rlball.cpp))
+
+El planeta Arena y el balón del estadio comparten una superficie generada en código y horneada en
+un cubemap (color y brillo). El diseño sale de un cubo inflado:
+
+- **Paneles blancos** (caras ±X y ±Y) con un relieve suave de hexágonos grandes.
+- **Paneles grises** (caras ±Z) con una malla fina de hexágonos; cada uno queda rodeado de blancos.
+- **Costuras negras** de hule sobre las aristas del cubo (donde la segunda coordenada más grande se
+  acerca a la mayor).
+- **Placas mecánicas** en las 8 esquinas, donde se juntan tres costuras: gris claro con estrías,
+  brazos sobre las costuras y un **lente negro con aro** en el centro.
+
+La rejilla de hexágonos se calcula con dos rejillas rectangulares de centros desfasadas: se toma el
+centro más cercano y la distancia hexagonal da qué tan cerca está el borde.
+
+### Mundo abierto de Arena ([openworld.cpp](src/openworld.cpp))
+
+- **Aterrizar:** Arena baja al carro hasta 1.7 de altura (cada planeta puede tener su altitud de
+  crucero). Al tocar el suelo hay un destello y se cambia a una escena plana a escala del carro;
+  con `U` se despega y el carro sale al espacio por encima de Arena.
+- **Terreno:** rejilla de 150 × 150 celdas (45 000 triángulos) partida en 25 trozos que se descartan
+  por separado. La altura es plana alrededor del estadio, con colinas de ruido fractal que aparecen
+  poco a poco y montañas que cierran el borde. Los árboles y rocas se reparten con semilla fija, en
+  36 trozos que se descartan por vista y por distancia.
+- **Cielo:** degradado calculado por píxel, Albor enorme con su halo, y Cobalto como una luna
+  iluminada desde Albor.
+- **Estadio** (medidas parecidas a Rocket League con el carro de 1.4): cancha de 80 × 104 con las
+  esquinas cortadas, paredes con bordes que brillan del color de cada equipo, porterías con red,
+  gradas con un túnel frente a cada puerta lateral y cuatro torres de luz. Las paredes son
+  segmentos vistos desde arriba: el carro y el balón son círculos que chocan contra ellos. Algunos
+  segmentos solo detienen al balón (las puertas laterales y la boca de la portería arriba del
+  travesaño).
+- **Carro en el suelo:** sigue la altura y la inclinación del terreno, acelera menos cerca de su
+  velocidad máxima, gira según la velocidad y pierde rápido la velocidad de lado (agarre). Salto,
+  segundo salto con **flip** (el modelo da una vuelta completa y empuja hacia donde se apunta) y
+  boost en el aire hacia donde apunta la nariz, con lo que se puede volar.
+- **Balón:** gravedad, rebote en el suelo, las paredes y el techo de la portería, fricción al rodar
+  y giro según lo que avanza. El golpe del carro es esfera contra esfera con la velocidad relativa,
+  y un flip le pega más fuerte.
+- **Rival:** se coloca detrás del balón en la línea hacia la portería azul y acelera; si quedó del
+  lado equivocado lo rodea, usa boost en las rectas y salta si el balón está alto. Espera frente a
+  su portería mientras el jugador no ha entrado al estadio.
+- **Partido:** 3 minutos (el reloj solo corre con el jugador dentro), saque en diagonal con cuenta
+  regresiva, explosión de partículas en cada gol, tiempo extra si hay empate y pads de boost que
+  tardan 10 s en volver a llenarse.
 - **Carrera de anillos en Cobalto:** 14 anillos sobre un camino que sube y baja de latitud, cada uno
   a otra altura (hay que usar `↑`/`↓`). El reloj empieza en el primero; el siguiente es dorado. Se
   guarda el mejor tiempo.
@@ -467,10 +533,11 @@ altura del terreno) que gira con el planeta.
 - **Vuelos simulados:** acercamiento, vuelta completa alrededor de un planeta, choque con boost
   sin atravesarlo, salida subiendo o con `F`, y desvío por gravedad (con y sin `V`).
 - **Agujero negro:** viaje de ida y vuelta entre los dos universos con vuelos simulados.
-- **Minijuegos:** golpe al balón (sale volando y cuenta el toque) y una vuelta completa a los 14
-  anillos con su tiempo.
+- **Minijuegos:** aterrizaje en Arena y despegue con `U`; entrada al estadio por la puerta lateral
+  (recoge un pad de boost); saque, golpes del jugador y del rival, salto y flip, y goles con el
+  marcador; una vuelta completa a los 14 anillos de Cobalto con su tiempo.
 - **Rendimiento** (i5-10500H, 12 hilos): entre 7 y 15 ms por cuadro según la vista; hasta ~24 ms
-  con el agujero negro llenando la pantalla.
+  con el agujero negro llenando la pantalla y ~20 ms en el estadio del mundo abierto.
 
 ## Limitaciones conocidas
 
@@ -484,8 +551,9 @@ altura del terreno) que gira con el planeta.
 - La captura con `P` se guarda como PNG sin compresión (~1.5 MB).
 - La lente del agujero negro trabaja con la imagen ya dibujada: no puede mostrar lo que está fuera
   de la pantalla, así que cerca de los bordes repite los píxeles de la orilla.
-- El balón no choca con los postes de las porterías; el marcador y el mejor tiempo no se guardan al
-  cerrar el programa.
+- En el mundo abierto no se puede manejar por las paredes (como en Rocket League), los árboles y las
+  rocas no tienen colisión, y el rival es sencillo (no hace flips ni vuela).
+- El marcador y el mejor tiempo no se guardan al cerrar el programa.
 
 ## Regenerar el modelo del carro
 

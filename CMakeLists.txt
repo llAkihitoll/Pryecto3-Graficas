@@ -33,11 +33,13 @@ add_executable(galaxia
     src/minigames.cpp
     src/noise.cpp
     src/obj_loader.cpp
+    src/openworld.cpp
     src/parallel.cpp
     src/particles.cpp
     src/planets.cpp
     src/props.cpp
     src/renderer.cpp
+    src/rlball.cpp
     src/scene.cpp
     src/shaders.cpp
     src/ship.cpp
