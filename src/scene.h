@@ -77,6 +77,10 @@ inline float keplerPeriod(float orbitRadius) { return KEPLER_K * std::pow(orbitR
 // Indices de los planetas con minijuego en el universo alterno.
 const int ALT_ARENA = 1;   // futbol estilo Rocket League
 const int ALT_TRAINING = 2; // Entrenamiento: anillos y tiros de practica
+const int ALT_PACMAN = 4;   // planeta con forma de Pac-Man: juego de Pac-Man
+const int ALT_GALAGA = 5;   // planeta con forma de nave: juego de Galaga
+const int ALT_CENTIPEDE = 6; // planeta con forma de oruga: juego de Centipede
+const int ALT_SNAKE = 7;     // planeta con forma de serpiente enrollada: juego de Snake
 
 struct Scene {
     std::vector<CelestialBody> bodies;

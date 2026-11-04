@@ -20,6 +20,7 @@
 #include "boost_flame.h"
 #include "particles.h"
 #include "openworld.h"
+#include "arcade.h"
 
 // Resolucion interna del framebuffer. La ventana es mas grande y SDL solo
 // estira la imagen ya terminada al mostrarla.
@@ -108,7 +109,7 @@ ShipInput readKeyboard() {
     const Uint8* k = SDL_GetKeyboardState(nullptr);
     ShipInput in;
     in.throttle = (float)k[SDL_SCANCODE_W] - (float)k[SDL_SCANCODE_S];
-    in.steer = (float)k[SDL_SCANCODE_A] - (float)k[SDL_SCANCODE_D];
+    in.steer = (float)(k[SDL_SCANCODE_A] || k[SDL_SCANCODE_LEFT]) - (float)(k[SDL_SCANCODE_D] || k[SDL_SCANCODE_RIGHT]);
     in.pitch = (float)k[SDL_SCANCODE_UP] - (float)k[SDL_SCANCODE_DOWN];
     in.roll = (float)k[SDL_SCANCODE_E] - (float)k[SDL_SCANCODE_Q];
     in.boost = k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_RSHIFT];
@@ -235,6 +236,7 @@ int main(int argc, char* argv[]) {
     //   --arena                   empieza en el mundo abierto de Arena (afuera del estadio)
     //   --kickoff                 con --arena: empieza en el saque, dentro del estadio
     //   --training                empieza en el mundo abierto de Entrenamiento
+    //   --pacman / --galaga / --centipede / --snake   empieza en el juego de ese planeta
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f, zoom = 0.0f;
     std::string flightScript;
@@ -249,6 +251,7 @@ int main(int argc, char* argv[]) {
     bool showTrajectory = true; // tecla Y: puntos de la trayectoria prevista del carro
     bool noNormalMap = false;
     bool startAlt = false, startAtHole = false, startArena = false, startKickoff = false, startTraining = false;
+    int startArcade = 0; // planeta del juego con que se empieza (ALT_PACMAN...), 0 = ninguno
     Optimizations opt;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshotPath = argv[++i];
@@ -274,6 +277,10 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--arena") == 0) startAlt = startArena = true;
         else if (std::strcmp(argv[i], "--kickoff") == 0) startKickoff = true;
         else if (std::strcmp(argv[i], "--training") == 0) startAlt = startTraining = true;
+        else if (std::strcmp(argv[i], "--pacman") == 0) { startAlt = true; startArcade = ALT_PACMAN; }
+        else if (std::strcmp(argv[i], "--galaga") == 0) { startAlt = true; startArcade = ALT_GALAGA; }
+        else if (std::strcmp(argv[i], "--centipede") == 0) { startAlt = true; startArcade = ALT_CENTIPEDE; }
+        else if (std::strcmp(argv[i], "--snake") == 0) { startAlt = true; startArcade = ALT_SNAKE; }
     }
 
     // Construir la escena incluye hornear las superficies del sol y Duna.
@@ -299,13 +306,21 @@ int main(int argc, char* argv[]) {
     // destructor lo une).
     Scene altScene;
     OpenWorld arenaWorld, trainingWorld;
+    PacmanGame pacman;
+    GalagaGame galaga;
+    CentipedeGame centipede;
+    SnakeGame snake;
     struct Joiner {
         std::thread thread;
         ~Joiner() { if (thread.joinable()) thread.join(); }
-    } altBuilder{std::thread([&altScene, &arenaWorld, &trainingWorld]() {
+    } altBuilder{std::thread([&altScene, &arenaWorld, &trainingWorld, &pacman, &galaga, &centipede, &snake]() {
         altScene.buildAlternate();
         arenaWorld.build(2026, OpenWorld::Kind::Arena);
         trainingWorld.build(77, OpenWorld::Kind::Training);
+        pacman.build();
+        galaga.build();
+        centipede.build();
+        snake.build();
     })};
     bool altReady = false;
     auto ensureAlt = [&]() {
@@ -480,19 +495,31 @@ int main(int argc, char* argv[]) {
     // de poder aterrizar otra vez.
     bool inOpenWorld = false;
     OpenWorld* world = &arenaWorld; // el mundo abierto actual
+    ArcadeGame* arcade = nullptr;   // el juego de arcade actual, si hay
+    // Juego de arcade de cada planeta (nullptr = no tiene: es un mundo abierto).
+    auto arcadeFor = [&](int body) -> ArcadeGame* {
+        switch (body) {
+            case ALT_PACMAN: return &pacman;
+            case ALT_GALAGA: return &galaga;
+            case ALT_CENTIPEDE: return &centipede;
+            case ALT_SNAKE: return &snake;
+            default: return nullptr;
+        }
+    };
     int worldBody = ALT_ARENA;      // el planeta de ese mundo
     float landTimer = 0.0f;
     bool landSwapped = false, landing = true, landArmed = true;
     auto startTakeOff = [&]() {
-        if (!inOpenWorld || landTimer > 0.0f) return;
+        if (!(inOpenWorld || arcade) || landTimer > 0.0f) return;
         landTimer = LAND_TIME;
         landSwapped = false;
         landing = false;
     };
     auto updateLanding = [&](float step) {
         if (landTimer <= 0.0f) {
-            if (!scene->alternate || inOpenWorld) return;
-            bool nearGame = ship.nearest == ALT_ARENA || ship.nearest == ALT_TRAINING;
+            if (!scene->alternate || inOpenWorld || arcade) return;
+            // Todos los planetas del universo alterno (menos la estrella y el agujero) tienen juego.
+            bool nearGame = ship.nearest >= ALT_ARENA && ship.nearest != scene->blackHoleIndex;
             if (!nearGame || ship.altitude > scene->bodies[ship.nearest].radius * 2.6f) landArmed = true;
             if (landArmed && nearGame && ship.surfaceMode && !ship.crashed && ship.altitude < 2.2f) {
                 landTimer = LAND_TIME;
@@ -508,12 +535,19 @@ int main(int argc, char* argv[]) {
         landSwapped = true;
         particles.clear();
         if (landing) {
-            inOpenWorld = true;
-            world->enter();
-            std::printf("Aterrizaste en %s: mundo abierto\n", scene->bodies[worldBody].name.c_str());
+            if (arcadeFor(worldBody)) { // juego de arcade
+                arcade = arcadeFor(worldBody);
+                arcade->enter();
+                std::printf("Aterrizaste en %s: a jugar\n", scene->bodies[worldBody].name.c_str());
+            } else {
+                inOpenWorld = true;
+                world->enter();
+                std::printf("Aterrizaste en %s: mundo abierto\n", scene->bodies[worldBody].name.c_str());
+            }
         } else {
             // Sale del lado de Albor, alto y alejandose del planeta.
             inOpenWorld = false;
+            arcade = nullptr;
             landArmed = false;
             const CelestialBody& planet = scene->bodies[worldBody];
             Vec3 center = planet.position(elapsed);
@@ -530,9 +564,12 @@ int main(int argc, char* argv[]) {
     // Un paso de la simulacion: carro, efectos, minijuegos, agujero negro y
     // camara. Lo usan el ciclo normal y el guion de vuelo de las pruebas.
     auto simulate = [&](const ShipInput& in, float step, bool looking, float mouseDx, float mouseDy, bool respawn) {
-        if (inOpenWorld) {
+        if (inOpenWorld || arcade) {
             // Mientras destella el despegue el carro ya no se controla.
-            world->update(landTimer > 0.0f ? ShipInput{} : in, step, particles);
+            ShipInput none;
+            const ShipInput& use = landTimer > 0.0f ? none : in;
+            if (arcade) arcade->update(use, step, particles);
+            else world->update(use, step, particles);
             particles.update(step);
             updateLanding(step);
             return;
@@ -544,9 +581,9 @@ int main(int argc, char* argv[]) {
         if (respawn && ship.crashed && respawnTimer <= 0.0f) respawnShip(); // reaparece en el punto de inicio
         if (updateWarp(step)) colliders = collidersAt(*scene, elapsed);
         updateLanding(step);
-        if (inOpenWorld) return;
+        if (inOpenWorld || arcade) return;
         // En la cancha la camara va mas baja y mira al frente, para ver el balon.
-        bool arenaCamera = scene->alternate && (ship.nearest == ALT_ARENA || ship.nearest == ALT_TRAINING);
+        bool arenaCamera = scene->alternate && ship.nearest >= ALT_ARENA && ship.nearest != scene->blackHoleIndex;
         float k = 1.0f - std::exp(-3.0f * step);
         camera.surfaceHeight += ((arenaCamera ? 2.0f : 3.5f) - camera.surfaceHeight) * k;
         camera.surfaceLookDown += ((arenaCamera ? 0.2f : 2.5f) - camera.surfaceLookDown) * k;
@@ -563,6 +600,11 @@ int main(int argc, char* argv[]) {
         }
         world->enter();
         if (startKickoff) world->placeAtKickoff();
+    }
+    if (startArcade) {
+        worldBody = startArcade;
+        arcade = arcadeFor(startArcade);
+        arcade->enter();
     }
 
     // Modo de prueba: simula el guion de vuelo a 60 FPS antes de la captura
@@ -594,6 +636,7 @@ int main(int argc, char* argv[]) {
                         length(ship.velocity),
                         ship.crashed ? "EXPLOTO" : (ship.surfaceMode ? "superficie" : "libre"), degreesAround,
                         belt.flying(), belt.explosions());
+            if (arcade) std::printf("         %s: %d puntos\n", arcade->name(), arcade->score());
             if (inOpenWorld) {
                 const GroundCar& c = world->player();
                 Vec3 ball = world->ballPosition();
@@ -674,9 +717,14 @@ int main(int argc, char* argv[]) {
                     case SDLK_u: startTakeOff(); break;
                     case SDLK_c: world->ballCamera = !world->ballCamera; break;
                     case SDLK_RETURN:
-                        if (inOpenWorld) world->restartMatch();
+                        if (arcade) arcade->restart();
+                        else if (inOpenWorld) world->restartMatch();
                         break;
                     case SDLK_r:
+                        if (arcade) {
+                            arcade->restart();
+                            break;
+                        }
                         if (inOpenWorld) {
                             world->respawn();
                             break;
@@ -685,7 +733,7 @@ int main(int argc, char* argv[]) {
                         camera.keepOutside(collidersAt(*scene, elapsed));
                         break;
                     case SDLK_j: // junto al agujero negro de este universo, mirandolo
-                        if (warpTimer <= 0.0f && !inOpenWorld) {
+                        if (warpTimer <= 0.0f && !inOpenWorld && !arcade) {
                             respawnShip();
                             ship = makeHoleViewShip(*scene, elapsed);
                             camera.snapTo(ship);
@@ -715,7 +763,17 @@ int main(int argc, char* argv[]) {
         // En modo captura no hay tiempo real: se estiman los FPS con el render.
         float shownFps = screenshotPath ? (lastFrameMs > 0.0f ? 1000.0f / lastFrameMs : 0.0f) : displayedFps;
 
-        if (inOpenWorld) {
+        if (arcade) {
+            // Juego de arcade: el tablero flota en el cielo morado del universo alterno.
+            u.cameraPos = arcade->eye;
+            u.view = lookAt(arcade->eye, arcade->target, Vec3{0, 1, 0});
+            u.lightPos = Vec3{0.0f, 1000.0f, 0.0f};
+            scene->skybox.draw(fb, u);
+            scene->drawVoxelDecor(fb, u, stats);
+            arcade->draw(fb, u, stats, elapsed);
+            particles.draw(fb, u);
+            arcade->drawHud(fb, shownFps, showHelp);
+        } else if (inOpenWorld) {
             u.cameraPos = world->eye;
             u.view = lookAt(world->eye, world->target, Vec3{0, 1, 0});
             world->draw(fb, u, stats, carAssets, elapsed);
@@ -820,12 +878,16 @@ int main(int argc, char* argv[]) {
             // Panel del minijuego al acercarse a su planeta.
             if (scene->alternate && !ship.crashed && ship.nearest >= 0) {
                 bool close = ship.altitude < scene->bodies[ship.nearest].radius * 1.5f;
-                bool arena = ship.nearest == ALT_ARENA, training = ship.nearest == ALT_TRAINING;
-                if ((arena || training) && close) {
-                    const char* title = arena ? "ARENA - ESTADIO DE FUTBOL" : "ENTRENAMIENTO - ANILLOS Y TIROS";
-                    const char* msg = ship.surfaceMode ? (arena ? "ATERRIZANDO EN ARENA..." : "ATERRIZANDO EN ENTRENAMIENTO...")
-                                                       : (arena ? "BAJA A ARENA PARA ENTRAR A SU MUNDO ABIERTO"
-                                                                : "BAJA A ENTRENAMIENTO PARA ENTRAR A SU MUNDO ABIERTO");
+                // Titulo de cada planeta con juego (en el orden de sus indices).
+                static const char* titles[] = {"", "ARENA - ESTADIO DE FUTBOL", "ENTRENAMIENTO - ANILLOS Y TIROS", "",
+                                               "PAC-MAN - LABERINTO", "GALAGA - NAVES", "CENTIPEDE - ORUGA Y HONGOS",
+                                               "SNAKE - SERPIENTE"};
+                int n = ship.nearest;
+                if (n >= ALT_ARENA && n <= ALT_SNAKE && n != scene->blackHoleIndex && close) {
+                    const char* title = titles[n];
+                    char msg[96];
+                    if (ship.surfaceMode) std::snprintf(msg, sizeof(msg), "ATERRIZANDO EN %s...", scene->bodies[n].name.c_str());
+                    else std::snprintf(msg, sizeof(msg), "BAJA A %s PARA JUGAR", scene->bodies[n].name.c_str());
                     darkenRect(fb, (RENDER_WIDTH - 340) / 2, 8, 340, 30, 0.55f);
                     drawText(fb, (RENDER_WIDTH - textWidth(title)) / 2, 12, title, 0xFF98A2B8);
                     drawText(fb, (RENDER_WIDTH - textWidth(msg)) / 2, 25, msg, 0xFFFFD860);
@@ -894,7 +956,10 @@ int main(int argc, char* argv[]) {
                           stats.objectsCulled, stats.propsDrawn, scene->propSeed, stats.trianglesIn,
                           stats.trianglesDrawn, opt.cullObjects ? "si" : "no", opt.autoLod ? "si" : "no",
                           scene->deformTerrain ? "si" : "no", ship.gravityEnabled ? "si" : "no");
-            if (inOpenWorld) {
+            if (arcade) {
+                std::snprintf(title, sizeof(title), "Proyecto 3 - Galaxia (%s) | %.0f FPS | puntos %d | tris %d",
+                              arcade->name(), framesCounted / titleTimer, arcade->score(), stats.trianglesIn);
+            } else if (inOpenWorld) {
                 std::snprintf(title, sizeof(title),
                               "Proyecto 3 - Galaxia (mundo abierto de %s) | %.0f FPS | azul %d - %d naranja | "
                               "vel %.1f | boost %.0f | tris %d / raster %d",
