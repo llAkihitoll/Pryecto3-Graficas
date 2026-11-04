@@ -104,8 +104,9 @@ struct Scene {
     // Cobalto), otro cielo y un agujero negro para regresar (alternate.cpp).
     void buildAlternate();
 
-    // Estrellas del fondo con esa semilla.
-    void makeStars(unsigned seed, int count);
+    // Estrellas del fondo con esa semilla. fantasy: colores lila, rosa y
+    // violeta en vez de los de la temperatura (universo alterno).
+    void makeStars(unsigned seed, int count, bool fantasy = false);
 
     const CelestialBody* blackHole() const { return blackHoleIndex >= 0 ? &bodies[blackHoleIndex] : nullptr; }
 

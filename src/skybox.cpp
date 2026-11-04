@@ -102,7 +102,7 @@ void Skybox::bake(unsigned seed, int size, const SkyPalette& palette) {
             Vec3 q = p * 2.5f + n.offset;
             Vec3 warp{noise.fbm(q, 3), noise.fbm(q + Vec3{5.0f, 2.0f, 8.0f}, 3), 0.0f};
             float gas = smoothstep(-0.1f, 0.5f, noise.fbm(q * 1.6f + warp * 1.8f, 5));
-            color += n.color * (gas * near * 0.45f);
+            color += n.color * (gas * near * palette.nebulaStrength);
         }
 
         // Galaxias lejanas.

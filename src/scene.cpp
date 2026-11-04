@@ -271,7 +271,7 @@ void Scene::build(unsigned seed) {
     makeStars(STAR_SEED, STAR_COUNT);
 }
 
-void Scene::makeStars(unsigned seed, int count) {
+void Scene::makeStars(unsigned seed, int count, bool fantasy) {
     // Direcciones uniformes sobre la esfera: z uniforme en [-1, 1] y un
     // angulo uniforme alrededor. La semilla fija da siempre el mismo cielo.
     stars.clear();
@@ -290,6 +290,12 @@ void Scene::makeStars(unsigned seed, int count) {
                    : t < 0.65f ? Vec3{1.0f, 1.0f, 1.0f}
                    : t < 0.9f  ? Vec3{1.0f, 0.92f, 0.7f}
                                : Vec3{1.0f, 0.7f, 0.45f};
+        if (fantasy) {
+            color = t < 0.3f ? Vec3{0.8f, 0.65f, 1.0f}   // lila
+                  : t < 0.6f ? Vec3{1.0f, 1.0f, 1.0f}    // blanca
+                  : t < 0.85f ? Vec3{1.0f, 0.7f, 0.92f}  // rosa
+                              : Vec3{0.62f, 0.5f, 1.0f}; // violeta
+        }
         stars.push_back(Star{Vec3{r * std::cos(a), r * std::sin(a), z}, b, color});
     }
 }

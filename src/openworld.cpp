@@ -39,8 +39,10 @@ const float STEP = 1.0f / 120.0f;
 const Vec3 KICKOFF_BLUE{-14.0f, 0.0f, -26.0f};
 const Vec3 SPAWN{70.0f, 0.0f, 0.0f}; // afuera, frente a la puerta del lado +X
 
-static const Vec3 SKY_TOP{0.2f, 0.4f, 0.85f};
-static const Vec3 SKY_HORIZON{0.76f, 0.84f, 0.93f};
+// Cielo de fantasia del universo alterno: violeta arriba y lila rosado en el
+// horizonte (tambien es el color de la niebla).
+static const Vec3 SKY_TOP{0.36f, 0.24f, 0.72f};
+static const Vec3 SKY_HORIZON{0.86f, 0.74f, 0.93f};
 static const Vec3 WORLD_UP{0, 1, 0};
 
 static float smoothstep(float a, float b, float x) {
