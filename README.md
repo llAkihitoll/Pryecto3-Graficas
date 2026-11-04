@@ -35,6 +35,10 @@ dos planetas con **minijuego**:
 | Planeta | Minijuego |
 |---|---|
 | **Arena** | Un **balón de Rocket League gigante**. Al aterrizar se entra a un **mundo abierto**: colinas, bosques, rocas y montañas, y en el centro un **estadio como el de Rocket League** donde se juega un partido de 3 minutos contra un rival naranja que maneja la computadora |
+| **Pac-Man** | Un planeta con **forma de Pac-Man** (esfera amarilla con la boca abierta). Al aterrizar se juega **Pac-Man** en un laberinto de cubos de neón, con los cuatro fantasmas |
+| **Galaga** | Un planeta con **forma de la nave de Galaga**. Al aterrizar se juega **Galaga**: enemigos que entran en formación y se lanzan en picada |
+| **Centipede** | Un planeta con **forma de oruga** (segmentos verdes, cabeza rosa, antenas y patitas). Al aterrizar se juega **Centipede**: el ciempiés baja entre hongos y se parte al dispararle |
+| **Snake** | Un planeta con **forma de serpiente enrollada** que levanta la cabeza. Al aterrizar se juega **Snake**: comer frutas, crecer y no chocar |
 | **Entrenamiento** | Al aterrizar se entra a **su propio mundo abierto** (praderas azules): el mismo estadio sin rival para **tiros de práctica**, y una **carrera de anillos** contra reloj alrededor, con anillos a distintas alturas (unos se cruzan manejando, otros saltando o volando con boost) |
 
 Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
@@ -50,7 +54,11 @@ Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
 | ![Universo alterno: Albor y Arena](docs/capturas/15_universo_alterno.png) | ![Mundo abierto de Arena](docs/capturas/16_mundo_abierto.png) |
 | ![Arena: un balón de Rocket League gigante hecho de cubos](docs/capturas/19_arena_balon.png) | ![Saque en el estadio con el balón de Rocket League](docs/capturas/18_estadio.png) |
 | ![Carrera de anillos en el mundo abierto de Entrenamiento](docs/capturas/17_anillos.png) | ![Regreso: el agujero negro violeta del universo alterno](docs/capturas/20_regreso.png) |
-| ![Galaxia espiral y estrellas de cubos](docs/capturas/21_galaxia_cubos.png) | |
+| ![Galaxia espiral y estrellas de cubos](docs/capturas/21_galaxia_cubos.png) | ![Planeta Pac-Man con la boca abierta](docs/capturas/24_planeta_pacman.png) |
+| ![Planeta Galaga con forma de nave](docs/capturas/25_planeta_galaga.png) | ![Juego de Pac-Man en cubos](docs/capturas/22_pacman.png) |
+| ![Juego de Galaga en cubos](docs/capturas/23_galaga.png) | ![Planeta Centipede con forma de oruga](docs/capturas/26_planeta_centipede.png) |
+| ![Planeta Snake con forma de serpiente](docs/capturas/27_planeta_snake.png) | ![Juego de Centipede en cubos](docs/capturas/28_centipede.png) |
+| ![Juego de Snake en cubos](docs/capturas/29_snake.png) | |
 
 ---
 
@@ -145,6 +153,7 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `--arena` | Empieza en el mundo abierto de Arena, afuera del estadio |
 | `--kickoff` | Con `--arena`: empieza en el saque, dentro del estadio |
 | `--training` | Empieza en el mundo abierto de Entrenamiento, frente al primer anillo |
+| `--pacman` / `--galaga` / `--centipede` / `--snake` | Empieza en el juego de ese planeta (`--alt --near 4` a `--near 7`: cerca del planeta) |
 | `--look yaw pitch` | Gira la cámara alrededor del carro (grados) en la captura |
 | `--zoom D` | Distancia de la cámara al carro en la captura |
 
@@ -174,6 +183,9 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `B` | Activar o desactivar el descarte de caras traseras |
 | `H` | Mostrar u ocultar la ayuda de controles |
 | `J` | Ir junto al agujero negro del universo actual (para no tener que volar hasta él) |
+| `R` | Volver al punto de inicio (también reaparece al instante si el carro explotó) |
+| `P` | Guardar una captura en `captura.png` |
+| `Esc` | Salir |
 
 En los **mundos abiertos** de Arena y Entrenamiento los controles son los de Rocket League:
 
@@ -188,9 +200,13 @@ En los **mundos abiertos** de Arena y Entrenamiento los controles son los de Roc
 | `Enter` | Empezar otro partido (en Entrenamiento: reiniciar la carrera y el balón) |
 | `R` | Volver al punto de llegada |
 | `U` | Despegar y volver al espacio |
-| `R` | Volver al punto de inicio (también reaparece al instante si el carro explotó) |
-| `P` | Guardar una captura en `captura.png` |
-| `Esc` | Salir |
+
+En los **juegos de arcade** (`Enter` o `R`: jugar de nuevo; `U`: despegar y volver al espacio):
+
+| Tecla | Pac-Man | Galaga | Centipede | Snake |
+|---|---|---|---|---|
+| `W` `A` `S` `D` o flechas | Mover a Pac-Man | `A` / `D`: mover la nave | Mover al tirador en su zona | Girar la serpiente |
+| `Espacio` | — | Disparar (hasta 2 a la vez) | Disparar | — |
 
 ### La cámara
 
@@ -237,6 +253,7 @@ Agujero negro y minijuegos (después del recorrido anterior):
 | Bajar a Arena hasta tocar el suelo | Destello y llegada al **mundo abierto**: colinas, bosque y el estadio |
 | Entrar por la puerta lateral y jugar (`Espacio` salta, `C` cámara al balón) | Partido contra el rival naranja: saque, golpes, flips, pads de boost y explosión de gol |
 | Pulsar `U` | Despegue de vuelta al espacio |
+| Bajar a Pac-Man, Galaga, Centipede o Snake hasta tocar el suelo | Su juego de arcade en cubos sobre el cielo morado |
 | Bajar a Entrenamiento hasta tocar el suelo y cruzar el anillo dorado | Su mundo abierto: carrera de anillos con reloj y mejor tiempo, y tiros de práctica en el estadio |
 | Subir hasta *Regreso* (o `J`) y entrar | Vuelta al sistema solar normal |
 
@@ -282,7 +299,8 @@ src/
   openworld.*         Mundos abiertos de Arena y Entrenamiento: terreno, estadio, carro en el suelo,
                       balón, rival y carrera de anillos
   rlball.*            Superficie del balón de Rocket League (planeta Arena y balón del estadio)
-  voxels.*            Planetas, estrella, estrellas y galaxias de cubos del universo alterno
+  voxels.*            Planetas, estrella, estrellas, galaxias y sprites de cubos del universo alterno
+  arcade.*            Juegos de Pac-Man, Galaga, Centipede y Snake (planetas de arcade)
   mesh_builder.h      Ayudante para construir modelos en código con caras planas
 ```
 
@@ -446,6 +464,47 @@ el cielo de fondo sigue suave.
 - **Orillas:** en una cara, la coordenada local del eje de la cara cae justo en la rejilla; la segunda
   más cercana a la rejilla dice qué tan cerca está el píxel de una arista, y ahí se oscurece.
 
+### Juegos de arcade: Pac-Man, Galaga, Centipede y Snake ([arcade.cpp](src/arcade.cpp))
+
+- **Planetas:** Pac-Man es una esfera de cubos amarilla con la **boca cortada en cuña** hasta el centro
+  (los cubos de adentro que quedan a la vista toman el color de la superficie) y un ojo de cada lado;
+  gira sobre su eje. Galaga tiene la **forma de la nave del jugador**: el sprite visto desde arriba con
+  grosor (el cuerpo blanco más alto que las alas), inclinado casi de cara al plano de las órbitas.
+- **Al aterrizar** en ellos (como en Arena) se cambia a su juego. El tablero flota en el cielo morado
+  del universo alterno, visto desde arriba con una cámara fija. Los personajes son **sprites de pixel
+  art convertidos en cubos 3D** (cada píxel es un cubo, con varios pisos de alto).
+- **Pac-Man:** laberinto de 19 × 21 celdas con muros de neón violeta, puntos, píldoras de poder y
+  túnel lateral. El movimiento es por celdas: en cada centro se decide la siguiente dirección (Pac-Man
+  gira hacia donde se le pide si puede; dar media vuelta se puede siempre). Los cuatro fantasmas
+  eligen en cada cruce, sin dar media vuelta, la dirección que los deja más cerca de su objetivo:
+  - **Blinky** (rojo) va directo a Pac-Man; **Pinky** (rosa) a 4 celdas delante de él; **Inky**
+    (cian) al punto opuesto a Blinky respecto a 2 celdas delante; **Clyde** (naranja) lo persigue de
+    lejos y huye a su esquina de cerca.
+  - Alternan dispersarse (cada uno a su esquina) y perseguir. Con una píldora se asustan (azules, se
+    mueven al azar y parpadean antes de terminar); comidos valen 200, 400, 800 y 1600 y vuelven como
+    ojos a su casa. Salen de la casa por turnos.
+  - Vidas, niveles (más rápidos) y récord.
+- **Galaga:** la nave dispara hacia arriba. Abejas, mariposas y jefes (que aguantan dos disparos y
+  cambian de color) entran volando en curva hasta su lugar en la formación, que se mece de lado a
+  lado. Cada cierto tiempo uno se lanza **en picada** zigzagueando hacia la nave y disparándole; si no
+  lo derriban, vuelve a entrar por arriba. En picada valen el doble. Oleadas cada vez más rápidas,
+  vidas, invulnerabilidad al reaparecer y estrellas que pasan de fondo.
+- **Planetas de Centipede y Snake:** la oruga son 7 esferas en zigzag (manchas amarillas arriba,
+  segmentos de dos verdes) con patitas, antenas y la cabeza rosa con ojos; la serpiente es un tubo
+  que se enrolla en espiral plana (cola al centro, más grueso hacia la cabeza), con rayas, panza
+  amarilla, la cabeza levantada como cobra, ojos amarillos y lengua bífida. Los dos son cubos con
+  cualquier forma: una celda es sólida si su centro queda dentro de la figura.
+- **Centipede:** campo de 21 × 24 celdas con hongos. El ciempiés avanza de lado; al chocar con un
+  hongo o con la orilla baja una fila y da la vuelta, y al llegar abajo sube y baja dentro de la zona
+  del jugador. Cada segmento sigue esa regla por su cuenta, así que al dispararle a uno (se vuelve
+  hongo) **el ciempiés se parte** y el segmento de atrás pasa a ser cabeza. Los hongos aguantan 4
+  disparos y se van achicando. Una **araña** zigzaguea en la zona del jugador y se come los hongos.
+  Cabeza 100, cuerpo 10, araña 600; oleadas más largas y rápidas.
+- **Snake:** tablero de 24 × 18 en cuadros. La serpiente avanza una celda por paso y cada parte se
+  desliza de su celda anterior a la nueva (se ve continua). Cada fruta da 10 puntos, la hace crecer 3
+  y la acelera un 5 %. Las teclas se guardan en orden (hasta dos) para hacer giros rápidos, y no se
+  puede dar media vuelta. Chocar con la orilla o con su cuerpo termina la partida.
+
 ### Mundos abiertos de Arena y Entrenamiento ([openworld.cpp](src/openworld.cpp))
 
 Los dos planetas del universo alterno tienen su mundo abierto, con el mismo motor y distinta
@@ -573,6 +632,9 @@ altura del terreno) que gira con el planeta.
 
 ## Limitaciones conocidas
 
+- Los juegos de arcade son versiones simplificadas: los fantasmas de Pac-Man no van más lento en el
+  túnel ni hay frutas, en Galaga los jefes no capturan la nave con su rayo, y en Centipede no hay
+  pulgas ni escorpiones.
 - El modelo del carro no es de autoría propia (ver *Recursos externos*).
 - Los objetos de superficie y los anillos de Aurelia no tienen colisión (el carro los puede atravesar).
 - Los asteroides no chocan entre sí y las explosiones no dejan cráteres en los planetas.
