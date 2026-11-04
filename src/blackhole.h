@@ -28,3 +28,7 @@ void drawBlackHole(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Celes
 // los pixeles que estan mas lejos que el agujero (usa la profundidad), asi lo
 // que esta delante no se dobla.
 void applyLensing(Framebuffer& fb, const Uniforms& u, const Vec3& center, float radius);
+
+// El carro (una esfera de radio carRadius en "point") toca el centro negro
+// del agujero (su horizonte de eventos): eso lo lleva al otro universo.
+bool touchesBlackHole(const CelestialBody& hole, float time, const Vec3& point, float carRadius);

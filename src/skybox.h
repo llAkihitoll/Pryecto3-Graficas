@@ -16,6 +16,7 @@ struct SkyPalette {
     Vec3 nebulae[3] = {{0.9f, 0.25f, 0.6f}, {0.15f, 0.75f, 0.7f}, {0.4f, 0.35f, 1.0f}}; // magenta, turquesa, violeta
     Vec3 armA{0.55f, 0.65f, 1.0f}, armB{0.9f, 0.7f, 1.0f}; // colores de los brazos de las galaxias
     float nebulaStrength = 0.45f; // que tanto brillan las nebulosas
+    Vec3 haze{0.0f, 0.0f, 0.0f};  // bruma de color en todo el cielo (con ruido), 0 = sin bruma
 };
 
 struct Skybox {

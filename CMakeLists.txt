@@ -30,7 +30,6 @@ add_executable(galaxia
     src/geometry.cpp
     src/hud.cpp
     src/mesh.cpp
-    src/minigames.cpp
     src/noise.cpp
     src/obj_loader.cpp
     src/openworld.cpp
@@ -45,6 +44,7 @@ add_executable(galaxia
     src/ship.cpp
     src/skybox.cpp
     src/texture.cpp
+    src/voxels.cpp
 )
 
 target_include_directories(galaxia PRIVATE ${SDL2_INCLUDE_DIRS})

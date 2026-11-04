@@ -27,6 +27,7 @@ struct Material {
     float emissive = 0.0f;         // 1 = brilla con luz propia (faros)
     std::shared_ptr<NormalTexture> normalMap; // mapa de normales en espacio tangente (o nada)
     float normalStrength = 1.0f;   // que tan marcado se ve el relieve del mapa
+    float voxelSize = 0.0f;        // modelos de cubos: tamano de cada cubo (para dibujar sus orillas)
 };
 
 // Malla de triangulos lista para el pipeline. La usan tanto los modelos

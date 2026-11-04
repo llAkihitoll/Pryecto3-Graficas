@@ -26,7 +26,9 @@ struct BallTexel {
     float shine;
 };
 
-static BallTexel rocketBall(const Vec3& d) {
+// detail = false: sin los hexagonos ni las estrias, solo el color de cada
+// parte (para el planeta de cubos, donde cada cubo es mucho mas grande).
+static BallTexel rocketBall(const Vec3& d, bool detail = true) {
     const Vec3 white{0.92f, 0.93f, 0.95f}, grey{0.52f, 0.54f, 0.58f}, rubber{0.05f, 0.05f, 0.06f};
     const Vec3 plate{0.80f, 0.82f, 0.86f}, plateDark{0.50f, 0.52f, 0.56f};
     float ax = std::fabs(d.x), ay = std::fabs(d.y), az = std::fabs(d.z);
@@ -58,12 +60,13 @@ static BallTexel rocketBall(const Vec3& d) {
         if (edge < 0.012f) return {rubber, 0.2f}; // contorno oscuro de la placa
         // Estrias: anillos alrededor del lente y escalones sobre los brazos.
         float ribs = std::sin(angle * 140.0f);
-        Vec3 c = ribs > 0.55f ? plateDark : plate;
+        Vec3 c = ribs > 0.55f && detail ? plateDark : plate;
         if (angle > 0.1f && angle < 0.115f) c = plateDark; // ranura alrededor del centro
         return {c, 0.8f};
     }
     if (seam < 0.075f) return {rubber, 0.15f}; // costura negra
 
+    if (!detail) return axis != 2 ? BallTexel{white, 0.45f} : BallTexel{grey, 0.25f};
     if (axis != 2) {
         // Panel blanco: relieve suave de hexagonos grandes (sombra en los bordes).
         float e = hexEdge(s * 2.6f, t * 2.6f);
@@ -74,6 +77,12 @@ static BallTexel rocketBall(const Vec3& d) {
     float e = hexEdge(s * 9.0f, t * 9.0f);
     Vec3 c = e < 0.07f ? grey * 0.62f : grey * (0.95f + 0.1f * smoothstep(0.07f, 0.3f, e));
     return {c, 0.25f};
+}
+
+Vec3 rocketBallFlatColor(const Vec3& dir, float& shine) {
+    BallTexel t = rocketBall(dir, false);
+    shine = t.shine;
+    return t.color;
 }
 
 void bakeRocketBall(PlanetTextures& tex, int size) {
