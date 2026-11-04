@@ -35,7 +35,7 @@ dos planetas con **minijuego**:
 | Planeta | Minijuego |
 |---|---|
 | **Arena** | Un **balón de Rocket League gigante**. Al aterrizar se entra a un **mundo abierto**: colinas, bosques, rocas y montañas, y en el centro un **estadio como el de Rocket League** donde se juega un partido de 3 minutos contra un rival naranja que maneja la computadora |
-| **Cobalto** | **Carrera de anillos** contra reloj: 14 anillos a distintas alturas alrededor del planeta |
+| **Entrenamiento** | Al aterrizar se entra a **su propio mundo abierto** (praderas azules): el mismo estadio sin rival para **tiros de práctica**, y una **carrera de anillos** contra reloj alrededor, con anillos a distintas alturas (unos se cruzan manejando, otros saltando o volando con boost) |
 
 Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
 
@@ -48,8 +48,9 @@ Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
 | ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | ![Explosión de un asteroide al chocar con Duna](docs/capturas/12_explosion.png) |
 | ![Fondo: nebulosa, Vía Láctea y una galaxia espiral](docs/capturas/13_universo.png) | ![Agujero negro con disco de acreción y lente gravitacional](docs/capturas/14_agujero_negro.png) |
 | ![Universo alterno: Albor y Arena](docs/capturas/15_universo_alterno.png) | ![Mundo abierto de Arena](docs/capturas/16_mundo_abierto.png) |
-| ![Arena: un balón de Rocket League gigante](docs/capturas/19_arena_balon.png) | ![Saque en el estadio con el balón de Rocket League](docs/capturas/18_estadio.png) |
-| ![Carrera de anillos en Cobalto](docs/capturas/17_anillos.png) | ![Regreso: el agujero negro violeta del universo alterno](docs/capturas/20_regreso.png) |
+| ![Arena: un balón de Rocket League gigante hecho de cubos](docs/capturas/19_arena_balon.png) | ![Saque en el estadio con el balón de Rocket League](docs/capturas/18_estadio.png) |
+| ![Carrera de anillos en el mundo abierto de Entrenamiento](docs/capturas/17_anillos.png) | ![Regreso: el agujero negro violeta del universo alterno](docs/capturas/20_regreso.png) |
+| ![Galaxia espiral y estrellas de cubos](docs/capturas/21_galaxia_cubos.png) | |
 
 ---
 
@@ -139,10 +140,11 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `--dt-test` | Prueba de consistencia: el mismo vuelo simulado a 20, 30, 60, 144 y 240 FPS |
 | `--screenshot archivo.png` | Guarda un cuadro y termina (se combina con las opciones siguientes) |
 | `--fly "w:3,wa:2"` | Antes de la captura, simula un vuelo: teclas `w s a d q e`, `i`/`k` = flechas, `b` boost, `x` freno. En el universo alterno, `g` pone el carro frente al siguiente anillo. En el mundo abierto, `x` es saltar, `c` cambia a la cámara al balón y `u` despega |
-| `--alt` | Empieza en el universo alterno (`--near 1` = Arena, `--near 2` = Cobalto) |
+| `--alt` | Empieza en el universo alterno (`--near 1` = Arena, `--near 2` = Entrenamiento) |
 | `--hole` | Empieza junto al agujero negro, mirándolo (como la tecla `J`) |
 | `--arena` | Empieza en el mundo abierto de Arena, afuera del estadio |
 | `--kickoff` | Con `--arena`: empieza en el saque, dentro del estadio |
+| `--training` | Empieza en el mundo abierto de Entrenamiento, frente al primer anillo |
 | `--look yaw pitch` | Gira la cámara alrededor del carro (grados) en la captura |
 | `--zoom D` | Distancia de la cámara al carro en la captura |
 
@@ -173,7 +175,7 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `H` | Mostrar u ocultar la ayuda de controles |
 | `J` | Ir junto al agujero negro del universo actual (para no tener que volar hasta él) |
 
-En el **mundo abierto de Arena** los controles son los de Rocket League:
+En los **mundos abiertos** de Arena y Entrenamiento los controles son los de Rocket League:
 
 | Tecla | Acción |
 |---|---|
@@ -183,8 +185,8 @@ En el **mundo abierto de Arena** los controles son los de Rocket League:
 | `Espacio` | Saltar; en el aire, otra vez: **flip** hacia donde apunten `W`/`S`/`A`/`D` |
 | `↑` / `↓` | En el aire: subir o bajar la nariz (con boost se puede volar) |
 | `C` | Cámara al balón |
-| `Enter` | Empezar otro partido |
-| `R` | Volver a la entrada del estadio |
+| `Enter` | Empezar otro partido (en Entrenamiento: reiniciar la carrera y el balón) |
+| `R` | Volver al punto de llegada |
 | `U` | Despegar y volver al espacio |
 | `R` | Volver al punto de inicio (también reaparece al instante si el carro explotó) |
 | `P` | Guardar una captura en `captura.png` |
@@ -231,11 +233,11 @@ Agujero negro y minijuegos (después del recorrido anterior):
 | Qué hacer | Qué se muestra |
 |---|---|
 | Subir con `↑` desde el sol (o pulsar `J`) | El agujero negro: disco de acreción y la lente que dobla el fondo y la parte de atrás del disco |
-| Entrar con `W` al centro negro | Destello y llegada al **universo alterno**: Albor, Arena y Cobalto con otro cielo |
+| Entrar con `W` al centro negro | Destello y llegada al **universo alterno**: Albor, Arena y Entrenamiento con otro cielo |
 | Bajar a Arena hasta tocar el suelo | Destello y llegada al **mundo abierto**: colinas, bosque y el estadio |
 | Entrar por la puerta lateral y jugar (`Espacio` salta, `C` cámara al balón) | Partido contra el rival naranja: saque, golpes, flips, pads de boost y explosión de gol |
 | Pulsar `U` | Despegue de vuelta al espacio |
-| Bajar a Cobalto y cruzar el anillo dorado | Carrera de anillos con reloj y mejor tiempo |
+| Bajar a Entrenamiento hasta tocar el suelo y cruzar el anillo dorado | Su mundo abierto: carrera de anillos con reloj y mejor tiempo, y tiros de práctica en el estadio |
 | Subir hasta *Regreso* (o `J`) y entrar | Vuelta al sistema solar normal |
 
 Opcional: pasar por el cinturón de asteroides (entre Glacia y Vergel) y chocar rocas con boost
@@ -276,10 +278,11 @@ src/
   particles.*         Partículas de fuego y humo (estela del boost y explosiones)
   asteroids.*         Cinturón de asteroides: órbitas, choques con el carro y explosiones
   blackhole.*         Agujero negro: horizonte, disco de acreción y lente gravitacional
-  alternate.cpp       Universo alterno: Albor, Arena, Cobalto, su cielo y sus shaders
-  minigames.*         Carrera de anillos en Cobalto
-  openworld.*         Mundo abierto de Arena: terreno, estadio, carro en el suelo, balón y rival
+  alternate.cpp       Universo alterno: Albor, Arena, Entrenamiento, su cielo y su decoración
+  openworld.*         Mundos abiertos de Arena y Entrenamiento: terreno, estadio, carro en el suelo,
+                      balón, rival y carrera de anillos
   rlball.*            Superficie del balón de Rocket League (planeta Arena y balón del estadio)
+  voxels.*            Planetas, estrella, estrellas y galaxias de cubos del universo alterno
   mesh_builder.h      Ayudante para construir modelos en código con caras planas
 ```
 
@@ -333,12 +336,11 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | `propShader` | Objetos de superficie | Lambert y especular por material, brillo propio y sombra del planeta (sin luz si el sol está bajo su horizonte) |
 | `diskShader` (**animado**) | Disco de acreción | Gas que gira más rápido cerca del centro (Kepler), blanco por dentro y del color del disco por fuera, **efecto Doppler** (el lado que se acerca brilla más); mezcla aditiva |
 | `horizonShader` | Horizonte de eventos | Negro, con el **anillo de fotones** brillando en el borde |
-| `whiteStarShader` (**animado**) | Albor | Mismos gránulos que el sol con una paleta de azul a blanco |
-| `arenaShader` | Arena: balón de Rocket League gigante | Lee la superficie del balón (ver abajo) e ilumina con Lambert, Blinn-Phong según el material (las placas brillan más que el hule) y borde Fresnel |
+| `voxelShader` | Arena y Entrenamiento (cubos) | Lambert con poca luz ambiente, brillo propio por material (vetas de Entrenamiento) y **orillas oscuras en cada cubo**, calculadas con la posición local y el tamaño del cubo |
+| `voxelGlowShader` (**animado**) | Albor, estrellas y galaxias de cubos | Brillan solos; cada cubo late a su propio ritmo (fase según la celda en la que está) |
 | `groundShader` | Suelo del mundo abierto | La cancha (franjas, tono de cada equipo, líneas calculadas con la posición), asfalto alrededor del estadio, y pasto que pasa a roca en las pendientes y a nieve en lo alto; niebla según la distancia |
 | `worldShader` | Estadio, árboles, pads | Lambert, especular y luz propia (bordes de las paredes, lámparas, pads) con niebla |
 | `shadowShader` | Sombras | Disco con color **negativo** y mezcla aditiva: oscurece el suelo bajo el balón y los carros, más en el centro |
-| `cobaltShader` | Cobalto | Roca azul marmoleada con vetas cian que pulsan con el tiempo |
 | `ballShader` | Balón del estadio | La misma superficie que Arena, leída en espacio local para que gire cuando rueda |
 
 ### Fondo del universo ([skybox.cpp](src/skybox.cpp))
@@ -387,8 +389,8 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 - Está quieto en `(0, 650, 0)`, muy por encima del plano de las órbitas. Su etiqueta aparece al
   mirar hacia arriba; `J` lleva junto a él.
 - **Gravedad:** atrae como los planetas (inversa del cuadrado) con alcance de 7 radios, pero no se
-  puede tocar: el carro lo atraviesa. Al cruzar el horizonte la pantalla se pone blanca, y a la
-  mitad del destello se cambia de universo.
+  puede chocar con él. **Al tocar su centro negro** (el horizonte, aunque sea por la orilla; el
+  disco de acreción se puede atravesar) la pantalla se pone blanca, y a la mitad del destello se cambia de universo.
 - **Dibujo en tres pasos**, después de todo lo que está detrás de él:
   1. La mitad de atrás del **disco de acreción**, con mezcla aditiva y sin escribir profundidad.
   2. La **lente gravitacional**, en espacio de pantalla: un píxel a distancia `r` del centro
@@ -403,11 +405,10 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 
 - Es otra `Scene` con su estrella, sus planetas, sus estrellas de fondo y un cielo con otra paleta
   de fantasía en tonos morados (fondo violeta, Vía Láctea lila, nebulosas violeta, magenta y lavanda
-  más intensas, estrellas lila y rosas, y el disco de *Regreso* violeta). Se **hornea en otro hilo** mientras se juega
+  más intensas, una bruma morada con ruido en todo el cielo para que ninguna parte quede negra, y el
+  disco de *Regreso* violeta). Los cubos de los planetas reciben luz ambiente lila y un borde violeta. Se **hornea en otro hilo** mientras se juega
   en el universo normal, así el arranque no tarda más.
-- **Albor** tiene radio 48 (el sol normal, 30), así que las órbitas de Arena y Cobalto están más lejos.
-- Cobalto no gira sobre su eje, así que sus anillos se guardan relativos al centro del planeta y
-  solo se les suma su posición en la órbita.
+- **Albor** tiene radio 48 (el sol normal, 30), así que las órbitas de Arena y Entrenamiento están más lejos.
 
 ### Balón de Rocket League ([rlball.cpp](src/rlball.cpp))
 
@@ -424,18 +425,45 @@ un cubemap (color y brillo). El diseño sale de un cubo inflado:
 La rejilla de hexágonos se calcula con dos rejillas rectangulares de centros desfasadas: se toma el
 centro más cercano y la distancia hexagonal da qué tan cerca está el borde.
 
-### Mundo abierto de Arena ([openworld.cpp](src/openworld.cpp))
+### Cubos del universo alterno ([voxels.cpp](src/voxels.cpp))
+
+En el universo alterno la estrella, los planetas y la decoración están hechos de cubos (vóxeles);
+el cielo de fondo sigue suave.
+
+- **Planetas de cubos:** una rejilla 3D alrededor de una esfera de radio 1. Una celda es sólida si su
+  centro queda dentro de la esfera más sus capas de relieve, y **solo se generan las caras que dan a
+  una celda vacía** (las de adentro nunca se ven). Albor tiene 72 cubos de lado a lado, Arena 48 y
+  Entrenamiento 36, con un solo nivel de detalle: los cubos se ven igual de cerca y de lejos. Los colores se agrupan en
+  materiales, así la malla no necesita colores por vértice.
+  - **Albor:** cubos blancos y azulados que brillan; los gránulos más calientes sobresalen una capa.
+  - **Arena:** el balón de Rocket League en cubos (blanco, gris y costuras negras); las placas con
+    lente sobresalen una capa.
+  - **Entrenamiento:** terreno azul escalonado (lo más claro es más alto, hasta 2 capas) con vetas cian que brillan.
+- **Estrellas de decoración:** 700 cubos brillantes (lila, rosa, violeta y blanco) en un cascarón
+  lejano alrededor del sistema, con parpadeo por cubo.
+- **Galaxias de cubos:** dos espirales (núcleo y dos brazos en espiral logarítmica) de 1400 y 1000
+  cubos, con el disco de cara al sistema; giran despacio en sentidos contrarios.
+- **Orillas:** en una cara, la coordenada local del eje de la cara cae justo en la rejilla; la segunda
+  más cercana a la rejilla dice qué tan cerca está el píxel de una arista, y ahí se oscurece.
+
+### Mundos abiertos de Arena y Entrenamiento ([openworld.cpp](src/openworld.cpp))
+
+Los dos planetas del universo alterno tienen su mundo abierto, con el mismo motor y distinta
+semilla de terreno: en **Arena** se juega el partido contra el rival y en **Entrenamiento** no hay
+rival (tiros de práctica y carrera de anillos). El pasto de afuera es verde en Arena y azul en
+Entrenamiento, y en el cielo de cada uno se ve el otro planeta como una luna.
+
 
 - **Aterrizar:** Arena baja al carro hasta 1.7 de altura (cada planeta puede tener su altitud de
-  crucero). Al tocar el suelo hay un destello y se cambia a una escena plana a escala del carro;
-  con `U` se despega y el carro sale al espacio por encima de Arena.
+  crucero), igual que Entrenamiento. Al tocar el suelo hay un destello y se cambia a una escena
+  plana a escala del carro; con `U` se despega y el carro sale al espacio por encima de ese planeta.
 - **Terreno:** rejilla de 150 × 150 celdas (45 000 triángulos) partida en 25 trozos que se descartan
   por separado. La altura es plana alrededor del estadio, con colinas de ruido fractal que aparecen
   poco a poco y montañas que cierran el borde. Los árboles y rocas se reparten con semilla fija, en
   36 trozos que se descartan por vista y por distancia.
 - **Cielo:** degradado de atardecer lila (violeta arriba, lila rosado en el horizonte, que también
-  es el color de la niebla) calculado por píxel, Albor enorme con su halo, y Cobalto como una luna
-  iluminada desde Albor.
+  es el color de la niebla) calculado por píxel, Albor enorme con su halo, y el otro planeta como
+  una luna iluminada desde Albor.
 - **Estadio** (medidas parecidas a Rocket League con el carro de 1.4): cancha de 80 × 104 con las
   esquinas cortadas, paredes con bordes que brillan del color de cada equipo, porterías con red,
   gradas con un túnel frente a cada puerta lateral y cuatro torres de luz. Las paredes son
@@ -455,9 +483,11 @@ centro más cercano y la distancia hexagonal da qué tan cerca está el borde.
 - **Partido:** 3 minutos (el reloj solo corre con el jugador dentro), saque en diagonal con cuenta
   regresiva, explosión de partículas en cada gol, tiempo extra si hay empate y pads de boost que
   tardan 10 s en volver a llenarse.
-- **Carrera de anillos en Cobalto:** 14 anillos sobre un camino que sube y baja de latitud, cada uno
-  a otra altura (hay que usar `↑`/`↓`). El reloj empieza en el primero; el siguiente es dorado. Se
-  guarda el mejor tiempo.
+- **Entrenamiento:** el estadio sin rival ni reloj; cada gol suma a los **goles de práctica** y el
+  balón vuelve al centro. Alrededor hay una **carrera de 14 anillos** sobre el terreno: los bajos se
+  cruzan manejando, los medios saltando y los altos con doble salto o volando con boost. El reloj
+  empieza en el primero, el siguiente es dorado y se guarda el mejor tiempo. Los árboles no se
+  colocan cerca de los anillos para que no los tapen.
 
 ### Boost: llama de cohete y estela ([boost_flame.cpp](src/boost_flame.cpp))
 
@@ -537,7 +567,7 @@ altura del terreno) que gira con el planeta.
 - **Agujero negro:** viaje de ida y vuelta entre los dos universos con vuelos simulados.
 - **Minijuegos:** aterrizaje en Arena y despegue con `U`; entrada al estadio por la puerta lateral
   (recoge un pad de boost); saque, golpes del jugador y del rival, salto y flip, y goles con el
-  marcador; una vuelta completa a los 14 anillos de Cobalto con su tiempo.
+  marcador; aterrizaje en Entrenamiento y cruce de anillos en su mundo abierto.
 - **Rendimiento** (i5-10500H, 12 hilos): entre 7 y 15 ms por cuadro según la vista; hasta ~24 ms
   con el agujero negro llenando la pantalla y ~20 ms en el estadio del mundo abierto.
 
