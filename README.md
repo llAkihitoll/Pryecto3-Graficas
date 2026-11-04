@@ -49,7 +49,7 @@ Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
 | ![Fondo: nebulosa, Vía Láctea y una galaxia espiral](docs/capturas/13_universo.png) | ![Agujero negro con disco de acreción y lente gravitacional](docs/capturas/14_agujero_negro.png) |
 | ![Universo alterno: Albor y Arena](docs/capturas/15_universo_alterno.png) | ![Mundo abierto de Arena](docs/capturas/16_mundo_abierto.png) |
 | ![Arena: un balón de Rocket League gigante](docs/capturas/19_arena_balon.png) | ![Saque en el estadio con el balón de Rocket League](docs/capturas/18_estadio.png) |
-| ![Carrera de anillos en Cobalto](docs/capturas/17_anillos.png) | |
+| ![Carrera de anillos en Cobalto](docs/capturas/17_anillos.png) | ![Regreso: el agujero negro violeta del universo alterno](docs/capturas/20_regreso.png) |
 
 ---
 
@@ -402,7 +402,8 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 ### Universo alterno y minijuegos ([alternate.cpp](src/alternate.cpp), [minigames.cpp](src/minigames.cpp))
 
 - Es otra `Scene` con su estrella, sus planetas, sus estrellas de fondo y un cielo con otra paleta
-  (Vía Láctea dorada, nebulosas doradas, rojas y cian). Se **hornea en otro hilo** mientras se juega
+  de fantasía en tonos morados (fondo violeta, Vía Láctea lila, nebulosas violeta, magenta y lavanda
+  más intensas, estrellas lila y rosas, y el disco de *Regreso* violeta). Se **hornea en otro hilo** mientras se juega
   en el universo normal, así el arranque no tarda más.
 - **Albor** tiene radio 48 (el sol normal, 30), así que las órbitas de Arena y Cobalto están más lejos.
 - Cobalto no gira sobre su eje, así que sus anillos se guardan relativos al centro del planeta y
@@ -432,7 +433,8 @@ centro más cercano y la distancia hexagonal da qué tan cerca está el borde.
   por separado. La altura es plana alrededor del estadio, con colinas de ruido fractal que aparecen
   poco a poco y montañas que cierran el borde. Los árboles y rocas se reparten con semilla fija, en
   36 trozos que se descartan por vista y por distancia.
-- **Cielo:** degradado calculado por píxel, Albor enorme con su halo, y Cobalto como una luna
+- **Cielo:** degradado de atardecer lila (violeta arriba, lila rosado en el horizonte, que también
+  es el color de la niebla) calculado por píxel, Albor enorme con su halo, y Cobalto como una luna
   iluminada desde Albor.
 - **Estadio** (medidas parecidas a Rocket League con el carro de 1.4): cancha de 80 × 104 con las
   esquinas cortadas, paredes con bordes que brillan del color de cada equipo, porterías con red,
