@@ -3,6 +3,7 @@
 #include <cmath>
 #include <map>
 #include <random>
+#include <string>
 #include "mesh_builder.h"
 
 static float smoothstep(float a, float b, float x) {
@@ -78,28 +79,30 @@ struct MaterialTable {
     }
 };
 
-Mesh makeVoxelPlanet(int across, const std::function<VoxelCell(const Vec3&)>& cellAt) {
-    const float v = 2.0f / across; // tamano de cada cubo (la esfera mide 2)
-    const int m = (int)std::ceil((1.0f + 2.5f * v) / v);
+// Caja alineada con los ejes, con las caras hacia afuera.
+static void addBox(MeshBuilder& b, const Vec3& lo, const Vec3& hi, int mat) {
+    Vec3 p[8];
+    for (int i = 0; i < 8; ++i) p[i] = Vec3{i & 1 ? hi.x : lo.x, i & 2 ? hi.y : lo.y, i & 4 ? hi.z : lo.z};
+    Vec3 c = (lo + hi) * 0.5f;
+    const int faces[6][4] = {{0, 1, 3, 2}, {4, 5, 7, 6}, {0, 1, 5, 4}, {2, 3, 7, 6}, {0, 2, 6, 4}, {1, 3, 7, 5}};
+    for (const auto& f : faces) {
+        b.triangle(p[f[0]], p[f[1]], p[f[2]], mat, c);
+        b.triangle(p[f[0]], p[f[2]], p[f[3]], mat, c);
+    }
+}
+
+Mesh makeVoxelSolid(int across, float extent, const std::function<bool(const Vec3&)>& solidAt,
+                    const std::function<VoxelCell(const Vec3&)>& cellAt) {
+    const float v = 2.0f / across; // tamano de cada cubo (la esfera unitaria mide 2)
+    const int m = (int)std::ceil(extent / v);
     const int n = 2 * m;
     // Estado de cada celda: 0 = sin calcular, 1 = vacia, 2 = solida.
     std::vector<char> state((size_t)n * n * n, 0);
-    std::vector<VoxelCell> cells((size_t)n * n * n);
     auto center = [&](int i, int j, int k) { return Vec3{(i - m + 0.5f) * v, (j - m + 0.5f) * v, (k - m + 0.5f) * v}; };
     auto solid = [&](int i, int j, int k) -> bool {
         if (i < 0 || j < 0 || k < 0 || i >= n || j >= n || k >= n) return false;
         size_t id = ((size_t)i * n + j) * n + k;
-        if (state[id] == 0) {
-            Vec3 c = center(i, j, k);
-            float r = length(c);
-            if (r < 1.0f - 2.0f * v) state[id] = 2;      // muy adentro: solida, nunca se ve
-            else if (r > 1.0f + 2.5f * v) state[id] = 1; // demasiado lejos
-            else {
-                VoxelCell cell = cellAt(c * (1.0f / r));
-                cells[id] = cell;
-                state[id] = r <= 1.0f + cell.layers * v ? 2 : 1;
-            }
-        }
+        if (state[id] == 0) state[id] = solidAt(center(i, j, k)) ? 2 : 1;
         return state[id] == 2;
     };
 
@@ -111,14 +114,13 @@ Mesh makeVoxelPlanet(int across, const std::function<VoxelCell(const Vec3&)>& ce
             for (int k = 0; k < n; ++k) {
                 if (!solid(i, j, k)) continue;
                 Vec3 c = center(i, j, k);
-                if (length(c) < 1.0f - 2.0f * v) continue; // interior
-                size_t id = ((size_t)i * n + j) * n + k;
-                // Los de abajo de una capa de relieve toman el color de la
-                // superficie en su direccion.
-                const VoxelCell& cell = cells[id];
-                int mat = table.get(cell.color, cell.emissive);
+                int mat = -1; // el color solo se calcula si alguna cara se ve
                 for (const auto& d : dirs) {
                     if (solid(i + d[0], j + d[1], k + d[2])) continue;
+                    if (mat < 0) {
+                        VoxelCell cell = cellAt(c);
+                        mat = table.get(cell.color, cell.emissive);
+                    }
                     Vec3 nrm{(float)d[0], (float)d[1], (float)d[2]};
                     // Dos ejes de la cara (perpendiculares a la normal).
                     Vec3 a = d[0] != 0 ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
@@ -131,6 +133,46 @@ Mesh makeVoxelPlanet(int across, const std::function<VoxelCell(const Vec3&)>& ce
                     b.triangle(p0, p2, p3, mat, c);
                 }
             }
+    return b.mesh;
+}
+
+Mesh makeVoxelPlanet(int across, const std::function<VoxelCell(const Vec3&)>& cellAt,
+                     const std::function<bool(const Vec3&)>& carve) {
+    const float v = 2.0f / across;
+    auto solidAt = [&](const Vec3& c) {
+        if (carve && carve(c)) return false;
+        float r = length(c);
+        if (r < 1.0f - 2.0f * v) return true;       // muy adentro
+        if (r > 1.0f + 2.5f * v) return false;      // demasiado lejos
+        return r <= 1.0f + cellAt(c * (1.0f / r)).layers * v;
+    };
+    // Los cubos de adentro que quedan a la vista (por un corte) toman el
+    // color de la superficie en su direccion.
+    auto colorAt = [&](const Vec3& c) { return cellAt(normalize(c)); };
+    return makeVoxelSolid(across, 1.0f + 2.5f * v, solidAt, colorAt);
+}
+
+Mesh makeVoxelSprite(const std::vector<std::string>& rows, const std::map<char, Vec3>& palette, float pixel,
+                     int layers, bool flip) {
+    MeshBuilder b;
+    std::map<char, int> mats;
+    for (const auto& entry : palette) {
+        mats[entry.first] = b.material("Pixel", entry.second, 0.0f, 1.0f, 1.0f);
+        b.mesh.materials[mats[entry.first]].voxelSize = pixel;
+    }
+    const int h = (int)rows.size();
+    for (int r = 0; r < h; ++r) {
+        const int w = (int)rows[r].size();
+        for (int c = 0; c < w; ++c) {
+            auto it = mats.find(rows[r][c]);
+            if (it == mats.end()) continue; // pixel vacio
+            int row = flip ? h - 1 - r : r;
+            // Origen en la rejilla de pixeles (multiplos de "pixel"), asi las
+            // orillas de cada cubo caen donde las dibuja el shader.
+            float x0 = (c - w / 2) * pixel, z0 = (row - h / 2) * pixel;
+            addBox(b, Vec3{x0, 0.0f, z0}, Vec3{x0 + pixel, layers * pixel, z0 + pixel}, it->second);
+        }
+    }
     return b.mesh;
 }
 

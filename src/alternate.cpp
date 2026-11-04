@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 #include "blackhole.h"
+#include "arcade.h"
 #include "geometry.h"
 #include "rlball.h"
 #include "noise.h"
@@ -124,6 +125,69 @@ void Scene::buildAlternate() {
     spawnPoint = arrivalPoint = Vec3{-80.0f, 30.0f, 390.0f};
     spawnLook = ALT_ARENA;
 
+    // Planetas de arcade, mas lejos: Pac-Man (una esfera amarilla con la boca
+    // abierta) y Galaga (con la forma de la nave del juego).
+    CelestialBody pac;
+    pac.name = "Pac-Man";
+    pac.buildLods(Material{"Pac-Man", Vec3{1.0f, 0.85f, 0.1f}});
+    pac.shader = voxelShader;
+    pac.radius = 14.0f;
+    pac.orbitRadius = 470.0f;
+    pac.orbitPeriod = keplerPeriod(pac.orbitRadius);
+    pac.orbitPhase = 2.3f;
+    pac.spinPeriod = 40.0f;
+    pac.surfaceGravity = 8.0f;
+    pac.orbitColor = {1.0f, 0.85f, 0.2f};
+    pac.cruiseAltitude = 1.7f; // se aterriza en su juego
+    bodies.push_back(std::move(pac));
+
+    CelestialBody galaga;
+    galaga.name = "Galaga";
+    galaga.buildLods(Material{"Galaga", Vec3{0.9f, 0.9f, 1.0f}});
+    galaga.shader = voxelShader;
+    galaga.radius = 18.0f;
+    galaga.orbitRadius = 560.0f;
+    galaga.orbitPeriod = keplerPeriod(galaga.orbitRadius);
+    galaga.orbitPhase = 4.0f;
+    galaga.spinPeriod = 60.0f;
+    galaga.axialTilt = 1.25f; // casi de cara al plano de las orbitas: se ve la forma de la nave
+    galaga.surfaceGravity = 8.0f;
+    galaga.orbitColor = {0.4f, 0.9f, 1.0f};
+    galaga.cruiseAltitude = 1.7f;
+    bodies.push_back(std::move(galaga));
+
+    // Mas planetas de arcade, todavia mas lejos: una oruga (Centipede) y una
+    // serpiente enrollada (Snake).
+    CelestialBody centipede;
+    centipede.name = "Centipede";
+    centipede.buildLods(Material{"Centipede", Vec3{0.35f, 0.9f, 0.3f}});
+    centipede.shader = voxelShader;
+    centipede.radius = 16.0f;
+    centipede.orbitRadius = 650.0f;
+    centipede.orbitPeriod = keplerPeriod(centipede.orbitRadius);
+    centipede.orbitPhase = 5.4f;
+    centipede.spinPeriod = 50.0f;
+    centipede.axialTilt = 0.3f;
+    centipede.surfaceGravity = 8.0f;
+    centipede.orbitColor = {0.4f, 1.0f, 0.4f};
+    centipede.cruiseAltitude = 1.7f;
+    bodies.push_back(std::move(centipede));
+
+    CelestialBody snake;
+    snake.name = "Snake";
+    snake.buildLods(Material{"Snake", Vec3{0.3f, 0.85f, 0.35f}});
+    snake.shader = voxelShader;
+    snake.radius = 17.0f;
+    snake.orbitRadius = 740.0f;
+    snake.orbitPeriod = keplerPeriod(snake.orbitRadius);
+    snake.orbitPhase = 0.6f;
+    snake.spinPeriod = 45.0f;
+    snake.axialTilt = 0.5f;
+    snake.surfaceGravity = 8.0f;
+    snake.orbitColor = {0.9f, 1.0f, 0.4f};
+    snake.cruiseAltitude = 1.7f;
+    bodies.push_back(std::move(snake));
+
     // Cielo de fantasia en tonos morados: fondo violeta, Via Lactea lila y
     // nebulosas violeta, magenta y lavanda, mas intensas que las del universo normal.
     SkyPalette palette;
@@ -178,6 +242,167 @@ void Scene::buildAlternate() {
         });
     });
     builders.emplace_back([&]() {
+        // Pac-Man: amarillo, con la boca (una cuna entre las quijadas, hacia
+        // +X) cortada hasta el centro y un ojo negro de cada lado.
+        auto mouth = [](const Vec3& p) { return p.x > 0.0f && std::fabs(std::atan2(p.y, p.x)) < 0.55f; };
+        const Vec3 eyeA = normalize(Vec3{0.35f, 0.72f, 0.45f}), eyeB = normalize(Vec3{0.35f, 0.72f, -0.45f});
+        bodies[ALT_PACMAN].lods.clear();
+        bodies[ALT_PACMAN].lods.push_back(makeVoxelPlanet(40, [&](const Vec3& d) {
+            bool eye = dot(d, eyeA) > 0.985f || dot(d, eyeB) > 0.985f;
+            return VoxelCell{eye ? Vec3{0.05f, 0.03f, 0.08f} : Vec3{1.0f, 0.85f, 0.1f}, 0, 0.0f};
+        }, mouth));
+    });
+    builders.emplace_back([&]() {
+        // Galaga: el sprite de la nave visto desde arriba (plano XZ), con
+        // grosor: el cuerpo blanco del centro mas alto que las alas.
+        const std::vector<std::string>& ship = galagaFighterSprite();
+        const int rows = (int)ship.size(), cols = (int)ship[0].size();
+        const float half = 1.4f;
+        auto pixel = [&](const Vec3& p) -> char {
+            int c = (int)std::floor((p.x + half) / (2.0f * half) * cols);
+            int r = (int)std::floor((p.z + half) / (2.0f * half) * rows);
+            if (c < 0 || r < 0 || c >= cols || r >= rows) return '.';
+            return ship[r][c];
+        };
+        auto thickness = [&](const Vec3& p, char ch) {
+            int c = (int)std::floor((p.x + half) / (2.0f * half) * cols);
+            if (ch == 'W') return std::abs(c - cols / 2) <= 1 ? 0.42f : 0.22f;
+            return ch == 'B' ? 0.3f : 0.16f;
+        };
+        bodies[ALT_GALAGA].lods.clear();
+        bodies[ALT_GALAGA].lods.push_back(makeVoxelSolid(40, half + 0.1f,
+            [&](const Vec3& p) {
+                char ch = pixel(p);
+                return ch != '.' && std::fabs(p.y) < thickness(p, ch);
+            },
+            [&](const Vec3& p) {
+                char ch = pixel(p);
+                Vec3 c = ch == 'R' ? Vec3{1.0f, 0.15f, 0.2f} : (ch == 'B' ? Vec3{0.2f, 0.35f, 1.0f} : Vec3{0.92f, 0.92f, 1.0f});
+                return VoxelCell{c, 0, ch == 'R' ? 0.4f : 0.0f};
+            }));
+    });
+    builders.emplace_back([&]() {
+        // Centipede: una oruga de 7 segmentos (esferas) en zigzag a lo largo
+        // de X, con patitas debajo, y la cabeza rosa con ojos y antenas.
+        const int count = 7;
+        Vec3 centers[count];
+        float radii[count];
+        for (int k = 0; k < count; ++k) {
+            centers[k] = Vec3{-1.15f + k * 0.38f, 0.0f, 0.3f * std::sin(k * 1.1f)};
+            radii[k] = k == count - 1 ? 0.36f : 0.3f;
+        }
+        const Vec3 headC = centers[count - 1];
+        auto nearSegment = [&](const Vec3& p, int& which) {
+            which = -1;
+            float best = 1e9f;
+            for (int k = 0; k < count; ++k) {
+                float d = length(p - centers[k]) - radii[k];
+                if (d < best) {
+                    best = d;
+                    which = k;
+                }
+            }
+            return best;
+        };
+        auto leg = [&](const Vec3& p) {
+            for (int k = 0; k < count - 1; ++k) {
+                Vec3 d = p - centers[k];
+                if (std::fabs(d.x) < 0.07f && d.y < -0.18f && d.y > -0.5f && std::fabs(std::fabs(d.z) - 0.2f) < 0.07f) return true;
+            }
+            return false;
+        };
+        auto antenna = [&](const Vec3& p) {
+            for (float side = -1.0f; side <= 1.0f; side += 2.0f) {
+                Vec3 a = headC + Vec3{0.12f, 0.28f, side * 0.12f}, b = headC + Vec3{0.32f, 0.62f, side * 0.3f};
+                Vec3 ab = b - a;
+                float t = clampf(dot(p - a, ab) / dot(ab, ab), 0.0f, 1.0f);
+                if (length(p - (a + ab * t)) < 0.05f) return true;
+            }
+            return false;
+        };
+        bodies[ALT_CENTIPEDE].lods.clear();
+        bodies[ALT_CENTIPEDE].lods.push_back(makeVoxelSolid(44, 1.6f,
+            [&](const Vec3& p) {
+                int k;
+                return nearSegment(p, k) < 0.0f || leg(p) || antenna(p);
+            },
+            [&](const Vec3& p) {
+                int k;
+                float d = nearSegment(p, k);
+                if (d > 0.02f) return VoxelCell{Vec3{0.15f, 0.25f, 0.1f}, 0, 0.0f}; // patas y antenas
+                if (k == count - 1) {
+                    Vec3 o = normalize(p - headC);
+                    // Ojos al frente (+X), un poco arriba.
+                    bool eye = o.x > 0.6f && o.y > 0.15f && std::fabs(std::fabs(o.z) - 0.4f) < 0.16f;
+                    return VoxelCell{eye ? Vec3{0.05f, 0.05f, 0.08f} : Vec3{1.0f, 0.4f, 0.6f}, 0, 0.0f};
+                }
+                Vec3 o = normalize(p - centers[k]);
+                bool spot = o.y > 0.75f; // manchas amarillas arriba de cada segmento
+                Vec3 green = k % 2 ? Vec3{0.25f, 0.7f, 0.22f} : Vec3{0.4f, 0.92f, 0.32f};
+                return VoxelCell{spot ? Vec3{1.0f, 0.9f, 0.3f} : green, 0, 0.0f};
+            }));
+    });
+    builders.emplace_back([&]() {
+        // Snake: un tubo que se enrolla en espiral plana (la cola al centro) y
+        // que al final levanta la cabeza como cobra, con ojos y lengua bifida.
+        const int samples = 220;
+        std::vector<Vec3> path(samples);
+        std::vector<float> radius(samples);
+        for (int i = 0; i < samples; ++i) {
+            float t = (float)i / (samples - 1);
+            float r = 0.22f + 0.95f * t, angle = 3.2f * PI * t;
+            float lift = t > 0.86f ? (t - 0.86f) / 0.14f : 0.0f;
+            path[i] = Vec3{r * std::cos(angle), 0.55f * lift * lift, r * std::sin(angle)};
+            radius[i] = 0.06f + 0.14f * t;
+        }
+        const Vec3 head = path[samples - 1];
+        const Vec3 forward = normalize(path[samples - 1] - path[samples - 4]);
+        auto closest = [&](const Vec3& p, int& which) {
+            float best = 1e9f;
+            which = 0;
+            for (int i = 0; i < samples; i += 1) {
+                float d = length(p - path[i]) - radius[i];
+                if (d < best) {
+                    best = d;
+                    which = i;
+                }
+            }
+            return best;
+        };
+        auto tongue = [&](const Vec3& p) {
+            Vec3 a = head + forward * 0.18f, b = head + forward * 0.42f;
+            Vec3 ab = b - a;
+            float t = clampf(dot(p - a, ab) / dot(ab, ab), 0.0f, 1.0f);
+            return length(p - (a + ab * t)) < 0.04f;
+        };
+        bodies[ALT_SNAKE].lods.clear();
+        bodies[ALT_SNAKE].lods.push_back(makeVoxelSolid(44, 1.45f,
+            [&](const Vec3& p) {
+                if (p.y < -0.3f || p.y > 0.85f) return false;
+                int i;
+                return closest(p, i) < 0.0f || length(p - head) < 0.21f || tongue(p);
+            },
+            [&](const Vec3& p) {
+                int i;
+                float d = closest(p, i);
+                if (tongue(p) && d > 0.0f) return VoxelCell{Vec3{1.0f, 0.2f, 0.3f}, 0, 0.5f};
+                if (length(p - head) < 0.23f) {
+                    // Dos ojos chicos: adelante, arriba y a cada lado.
+                    Vec3 o = normalize(p - head);
+                    Vec3 side = normalize(cross(forward, Vec3{0, 1, 0}));
+                    Vec3 up = Vec3{0, 1, 0};
+                    bool eye = dot(o, normalize(forward * 0.7f + up * 0.5f + side * 0.55f)) > 0.94f ||
+                               dot(o, normalize(forward * 0.7f + up * 0.5f - side * 0.55f)) > 0.94f;
+                    return VoxelCell{eye ? Vec3{1.0f, 0.85f, 0.1f} : Vec3{0.3f, 0.85f, 0.35f}, 0, eye ? 0.6f : 0.0f};
+                }
+                // Escamas: rayas a lo largo del cuerpo y la panza amarilla.
+                bool belly = p.y < path[i].y - radius[i] * 0.4f;
+                bool stripe = (i / 6) % 2 == 0;
+                Vec3 c = belly ? Vec3{0.95f, 0.85f, 0.4f} : (stripe ? Vec3{0.25f, 0.75f, 0.3f} : Vec3{0.12f, 0.45f, 0.2f});
+                return VoxelCell{c, 0, 0.0f};
+            }));
+    });
+    builders.emplace_back([&]() {
         // Estrellas y galaxias de decoracion, lejos de todo el sistema.
         voxelStars = makeVoxelStars(ALT_STAR_SEED, 700, 2600.0f, 4200.0f);
         voxelGalaxies.push_back(makeVoxelGalaxy(GALAXY_SEED, 1400, 750.0f, {1.0f, 0.9f, 1.0f}, {0.55f, 0.3f, 1.0f}));
@@ -192,5 +417,5 @@ void Scene::buildAlternate() {
     size_t tris = 0;
     for (const CelestialBody& b : bodies)
         if (!b.blackHole) tris += b.lods[0].triangles.size();
-    std::printf("Universo alterno listo: Albor, Arena (futbol) y Entrenamiento (anillos y tiros), de cubos (%zu triangulos)\n", tris);
+    std::printf("Universo alterno listo: Albor, Arena, Entrenamiento, Pac-Man, Galaga, Centipede y Snake, de cubos (%zu triangulos)\n", tris);
 }

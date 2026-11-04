@@ -21,6 +21,7 @@ find_package(ZLIB REQUIRED)
 add_executable(galaxia
     src/main.cpp
     src/alternate.cpp
+    src/arcade.cpp
     src/asteroids.cpp
     src/blackhole.cpp
     src/boost_flame.cpp

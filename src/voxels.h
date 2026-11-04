@@ -1,5 +1,7 @@
 #pragma once
 #include <functional>
+#include <map>
+#include <string>
 #include <vector>
 #include "mesh.h"
 #include "renderer.h"
@@ -19,7 +21,25 @@ struct VoxelCell {
 // celda de la rejilla es solida si su centro queda dentro de la esfera mas
 // sus capas de relieve; solo se generan las caras que dan a una celda vacia
 // (las de adentro nunca se ven). Los colores se agrupan en materiales.
-Mesh makeVoxelPlanet(int across, const std::function<VoxelCell(const Vec3&)>& cell);
+// carve (opcional) quita las celdas donde devuelve true, a cualquier
+// profundidad (la boca de Pac-Man); los cubos de adentro que quedan a la vista
+// toman el color de la superficie en su direccion.
+Mesh makeVoxelPlanet(int across, const std::function<VoxelCell(const Vec3&)>& cell,
+                     const std::function<bool(const Vec3&)>& carve = nullptr);
+
+// Cubos con cualquier forma: una celda (centro c, en la misma escala que la
+// esfera unitaria) es solida si solidAt(c); cellAt(c) da el color de las que
+// tienen alguna cara a la vista. La rejilla llega hasta "extent" en cada eje.
+// Lo usa el planeta con forma de nave.
+Mesh makeVoxelSolid(int across, float extent, const std::function<bool(const Vec3&)>& solidAt,
+                    const std::function<VoxelCell(const Vec3&)>& cellAt);
+
+// Sprite de pixel art convertido en cubos: cada caracter de "rows" con color
+// en la paleta es un cubo de "pixel" de lado y "layers" pisos de alto, sobre
+// el plano XZ (la primera fila hacia -Z; flip la pone hacia +Z). Centrado en
+// el origen. Los personajes de Pac-Man y Galaga.
+Mesh makeVoxelSprite(const std::vector<std::string>& rows, const std::map<char, Vec3>& palette, float pixel,
+                     int layers, bool flip = false);
 
 // Estrellas de decoracion: cubos brillantes repartidos en un cascaron lejano
 // alrededor del sistema, con colores de fantasia (lila, rosa, violeta, blanco).
