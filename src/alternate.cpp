@@ -134,24 +134,26 @@ void Scene::buildAlternate() {
     cobalt.orbitColor = {0.45f, 0.65f, 1.0f};
     bodies.push_back(std::move(cobalt));
 
-    // Agujero negro de regreso, arriba de Albor, con el disco azul.
-    bodies.push_back(makeBlackHole("Regreso", Vec3{0.0f, 420.0f, 0.0f}, 10.0f, Vec3{0.4f, 0.6f, 1.0f}));
+    // Agujero negro de regreso, arriba de Albor, con el disco violeta.
+    bodies.push_back(makeBlackHole("Regreso", Vec3{0.0f, 420.0f, 0.0f}, 10.0f, Vec3{0.7f, 0.4f, 1.0f}));
     blackHoleIndex = (int)bodies.size() - 1;
     // Se llega (y se reaparece) en el plano de las orbitas, por fuera de la
     // de Cobalto, mirando hacia Arena: asi se ve el sistema al llegar.
     spawnPoint = arrivalPoint = Vec3{-80.0f, 30.0f, 390.0f};
     spawnLook = ALT_ARENA;
 
-    // Cielo mas calido: Via Lactea dorada y nebulosas doradas, rojas y cian.
+    // Cielo de fantasia en tonos morados: fondo violeta, Via Lactea lila y
+    // nebulosas violeta, magenta y lavanda, mas intensas que las del universo normal.
     SkyPalette palette;
-    palette.background = {0.025f, 0.012f, 0.03f};
-    palette.band = {0.45f, 0.34f, 0.22f};
+    palette.background = {0.045f, 0.015f, 0.08f};
+    palette.band = {0.5f, 0.32f, 0.7f};
     palette.bandNormal = {-0.5f, 0.6f, 0.6f};
-    palette.nebulae[0] = {1.0f, 0.6f, 0.2f};
-    palette.nebulae[1] = {0.9f, 0.15f, 0.25f};
-    palette.nebulae[2] = {0.2f, 0.8f, 0.9f};
-    palette.armA = {1.0f, 0.75f, 0.5f};
-    palette.armB = {1.0f, 0.5f, 0.7f};
+    palette.nebulae[0] = {0.65f, 0.25f, 1.0f};
+    palette.nebulae[1] = {1.0f, 0.3f, 0.8f};
+    palette.nebulae[2] = {0.5f, 0.45f, 1.0f};
+    palette.armA = {0.85f, 0.6f, 1.0f};
+    palette.armB = {1.0f, 0.55f, 0.85f};
+    palette.nebulaStrength = 0.7f;
 
     std::vector<std::thread> bakers;
     bakers.emplace_back([this]() { bakeSun(bodies[0].textures, ALBOR_SEED, 256); });
@@ -160,6 +162,6 @@ void Scene::buildAlternate() {
     bakers.emplace_back([this]() { bakeCobalt(bodies[ALT_COBALT].textures, COBALT_SEED, 384); });
     for (std::thread& t : bakers) t.join();
 
-    makeStars(ALT_STAR_SEED, ALT_STAR_COUNT);
+    makeStars(ALT_STAR_SEED, ALT_STAR_COUNT, true);
     std::printf("Universo alterno listo: Albor, Arena (futbol) y Cobalto (anillos)\n");
 }
