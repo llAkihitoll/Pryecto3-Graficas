@@ -126,6 +126,11 @@ void applyLensing(Framebuffer& fb, const Uniforms& u, const Vec3& center, float 
     });
 }
 
+bool touchesBlackHole(const CelestialBody& hole, float time, const Vec3& point, float carRadius) {
+    // Solo el centro negro (el horizonte de eventos): el disco se puede atravesar.
+    return length(point - hole.position(time)) < hole.radius + carRadius;
+}
+
 void drawBlackHole(Framebuffer& fb, Uniforms& u, RenderStats& stats, const CelestialBody& hole, bool cullObjects) {
     Vec3 center = hole.position(u.time);
     // La lente alcanza mas que el disco: se prueba con esa esfera.

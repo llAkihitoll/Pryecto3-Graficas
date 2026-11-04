@@ -39,6 +39,13 @@ const float STEP = 1.0f / 120.0f;
 const Vec3 KICKOFF_BLUE{-14.0f, 0.0f, -26.0f};
 const Vec3 SPAWN{70.0f, 0.0f, 0.0f}; // afuera, frente a la puerta del lado +X
 
+// Carrera de anillos de Entrenamiento: anillos alrededor del estadio a
+// distintas alturas sobre el suelo (bajos: manejando; medios: saltando;
+// altos: con doble salto o volando con boost).
+const int RING_COUNT = 14;
+const float RING_RADIUS = 2.4f;
+const float RING_HEIGHTS[RING_COUNT] = {2.6f, 2.6f, 4.6f, 2.6f, 2.6f, 7.5f, 2.6f, 4.6f, 2.6f, 2.6f, 7.5f, 2.6f, 4.6f, 2.6f};
+
 // Cielo de fantasia del universo alterno: violeta arriba y lila rosado en el
 // horizonte (tambien es el color de la niebla).
 static const Vec3 SKY_TOP{0.36f, 0.24f, 0.72f};
@@ -73,6 +80,9 @@ static bool inPlaza(float x, float z) { return std::fabs(x) < FIELD_W + 22.0f &&
 // Direccion hacia Albor. Esta tan lejos que es la misma para todo el mundo:
 // se guarda una vez por cuadro en vez de normalizar en cada pixel.
 static Vec3 sunDir{0, 1, 0};
+// Color del pasto de afuera (cambia segun el mundo: verde en Arena, azul en
+// Entrenamiento); tambien se fija una vez por cuadro.
+static Vec3 meadow{0.27f, 0.52f, 0.2f};
 
 // Niebla: lo lejano se mezcla con el color del horizonte, asi las montanas
 // del borde se pierden en el cielo. d / (d + 200) crece parecido a
@@ -117,7 +127,7 @@ static Vec3 groundShader(const Fragment& f, const Uniforms& u) {
         albedo = seam ? Vec3{0.22f, 0.22f, 0.24f} : Vec3{0.34f, 0.34f, 0.36f};
     } else {
         float var = 0.85f + 0.15f * std::sin(p.x * 0.31f + std::sin(p.z * 0.21f) * 2.0f) * std::sin(p.z * 0.27f);
-        Vec3 grass = Vec3{0.27f, 0.52f, 0.2f} * var;
+        Vec3 grass = meadow * var;
         Vec3 rock{0.46f, 0.43f, 0.4f};
         albedo = lerp(grass, rock, smoothstep(0.86f, 0.7f, n.y));
         albedo = lerp(albedo, Vec3{0.93f, 0.95f, 0.98f}, smoothstep(34.0f, 42.0f, p.y));
@@ -244,8 +254,31 @@ static void appendModel(Mesh& out, const Mesh& model, int materialBase, const Ma
         out.triangles.push_back(Triangle{t.a + base, t.b + base, t.c + base, t.material + materialBase});
 }
 
-void OpenWorld::build(unsigned seed) {
+void OpenWorld::buildGates() {
+    gates.clear();
+    for (int i = 0; i < RING_COUNT; ++i) {
+        float theta = 2.0f * PI * i / RING_COUNT;
+        float r = 118.0f + 16.0f * std::sin(3.0f * theta);
+        float x = r * std::cos(theta), z = r * std::sin(theta);
+        Gate g;
+        g.position = Vec3{x, groundHeight(x, z) + RING_HEIGHTS[i], z};
+        g.axis = Vec3{-std::sin(theta), 0.0f, std::cos(theta)}; // hacia donde sigue la vuelta
+        gates.push_back(g);
+    }
+    Material gold{"Anillo siguiente", {1.0f, 0.8f, 0.25f}};
+    gold.emissive = 0.9f;
+    gold.specular = 0.8f;
+    gold.shininess = 48.0f;
+    Material blue{"Anillo", {0.35f, 0.6f, 1.0f}};
+    blue.emissive = 0.5f;
+    ringNext = makeTorus(RING_RADIUS, 0.25f, 32, 8, gold);
+    ringLater = makeTorus(RING_RADIUS, 0.25f, 32, 8, blue);
+}
+
+void OpenWorld::build(unsigned seed, Kind worldKind) {
+    kind = worldKind;
     noise = Noise(seed);
+    if (training()) buildGates();
     sunDirection = normalize(Vec3{0.45f, 0.75f, 0.35f});
 
     // --- Terreno: rejilla de 150 x 150 celdas, partida en 5 x 5 trozos para
@@ -426,6 +459,9 @@ void OpenWorld::build(unsigned seed) {
         float x = (unit(rng) * 2.0f - 1.0f) * 250.0f, z = (unit(rng) * 2.0f - 1.0f) * 250.0f;
         if (std::fabs(x) < FIELD_W + 32.0f && std::fabs(z) < FIELD_L + 38.0f) continue; // lejos del estadio
         if (std::fabs(z) < 8.0f && x > 0.0f && x < 110.0f) continue; // camino a la puerta
+        bool nearRing = false; // que no tapen los anillos de la carrera
+        for (const Gate& g : gates) nearRing = nearRing || length(flat(g.position - Vec3{x, 0.0f, z})) < 9.0f;
+        if (nearRing) continue;
         // Grupos: el ruido decide donde hay bosque.
         float forest = noise.perlin(Vec3{x * 0.02f, 7.0f, z * 0.02f});
         bool isTree = forest > -0.05f;
@@ -472,8 +508,9 @@ void OpenWorld::build(unsigned seed) {
 
     size_t sceneryTris = 0;
     for (const Mesh& m : scenery) sceneryTris += m.triangles.size();
-    std::printf("Mundo abierto de Arena: %zu triangulos de terreno, %zu del estadio, %d arboles y rocas (%zu)\n",
-                terrain.size() * (size_t)perChunk * perChunk * 2, stadium.triangles.size(), placed, sceneryTris);
+    std::printf("Mundo abierto de %s: %zu triangulos de terreno, %zu del estadio, %d arboles y rocas (%zu)\n",
+                training() ? "Entrenamiento" : "Arena", terrain.size() * (size_t)perChunk * perChunk * 2,
+                stadium.triangles.size(), placed, sceneryTris);
     enter();
     restartMatch();
 }
@@ -482,16 +519,40 @@ bool OpenWorld::playerInStadium() const { return inField(car.position.x, car.pos
 
 void OpenWorld::enter() {
     car = GroundCar{};
-    car.position = SPAWN;
-    car.position.y = groundHeight(SPAWN.x, SPAWN.z);
-    car.yaw = -PI * 0.5f; // mirando a -X, hacia la puerta
+    if (training()) { // frente al primer anillo
+        Vec3 p = gates[0].position - gates[0].axis * 14.0f;
+        car.position = Vec3{p.x, groundHeight(p.x, p.z), p.z};
+        car.yaw = std::atan2(gates[0].axis.x, gates[0].axis.z);
+        car.boost = 100.0f;
+    } else {
+        car.position = SPAWN;
+        car.position.y = groundHeight(SPAWN.x, SPAWN.z);
+        car.yaw = -PI * 0.5f; // mirando a -X, hacia la puerta
+    }
     accumulator = 0.0f;
     snapCamera();
+}
+
+void OpenWorld::resetBall() {
+    ballPos = Vec3{0.0f, BALL_R, 0.0f};
+    ballVel = Vec3{0, 0, 0};
 }
 
 void OpenWorld::respawn() { enter(); }
 
 void OpenWorld::restartMatch() {
+    if (training()) { // tiros y carrera desde cero
+        shots = 0;
+        touches = 0;
+        nextGate = 0;
+        raceRunning = false;
+        raceTimer = 0.0f;
+        resetBall();
+        for (Pad& p : pads) p.cooldown = 0.0f;
+        rival.position = Vec3{0.0f, -100.0f, 0.0f}; // no hay rival
+        phase = Phase::Free;
+        return;
+    }
     blue = orange = 0;
     clock = 180.0f;
     overtime = false;
@@ -515,6 +576,15 @@ void OpenWorld::placeAtKickoff() {
 }
 
 void OpenWorld::kickoff() {
+    if (training()) { // sin partido: solo el carro en el saque y el balon al centro
+        car = GroundCar{};
+        car.position = KICKOFF_BLUE;
+        car.yaw = std::atan2(-KICKOFF_BLUE.x, -KICKOFF_BLUE.z);
+        car.boost = 100.0f;
+        resetBall();
+        phase = Phase::Free;
+        return;
+    }
     ballPos = Vec3{0.0f, BALL_R, 0.0f};
     ballVel = Vec3{0, 0, 0};
     // Girado para que una placa con lente (esquina del cubo) mire al carro
@@ -811,7 +881,50 @@ void OpenWorld::scoreGoal(bool blueScored, Particles& particles) {
     std::printf("%s  azul %d - %d naranja\n", blueScored ? "Gol azul" : "Gol naranja", blue, orange);
 }
 
+// Cruzar el anillo siguiente: estar cerca de su plano y dentro del hueco. El
+// reloj empieza en el primero y para en el ultimo.
+void OpenWorld::checkGates() {
+    if (gates.empty()) return;
+    const Gate& g = gates[nextGate];
+    Vec3 d = car.position + WORLD_UP * 0.4f - g.position;
+    float along = dot(d, g.axis);
+    float radial = length(d - g.axis * along);
+    if (std::fabs(along) > 1.0f || radial > RING_RADIUS) return;
+    if (nextGate == 0) {
+        raceRunning = true;
+        raceTimer = 0.0f;
+    }
+    nextGate++;
+    if (nextGate == (int)gates.size()) {
+        raceLast = raceTimer;
+        if (raceBest <= 0.0f || raceLast < raceBest) raceBest = raceLast;
+        std::printf("Carrera de anillos: %.2f s (mejor %.2f s)\n", raceLast, raceBest);
+        finishFlash = 4.0f;
+        raceRunning = false;
+        nextGate = 0;
+    }
+}
+
 void OpenWorld::step(const ShipInput& input, float h, Particles& particles) {
+    if (training()) { // sin rival: el carro, el balon, los pads y los anillos
+        driveCar(car, input, h);
+        takePads(car);
+        for (Pad& p : pads) p.cooldown = std::max(0.0f, p.cooldown - h);
+        checkGates();
+        if (phase == Phase::Goal) return;
+        stepBall(h);
+        hitBall(car);
+        if (std::fabs(ballPos.x) < GOAL_W && std::fabs(ballPos.z) > FIELD_L + BALL_R) {
+            shots++;
+            lastGoalBlue = true;
+            particles.burst(ballPos, Vec3{0, 0, 0}, 40, 0.0f, 3.0f, 14.0f, 0.3f, 0.6f);
+            particles.burst(ballPos, Vec3{0, 0, 0}, 320, 4.0f, 20.0f, 4.0f, 0.8f, 2.0f);
+            phase = Phase::Goal;
+            phaseTimer = 1.5f;
+            std::printf("Gol de practica %d\n", shots);
+        }
+        return;
+    }
     bool frozen = phase == Phase::Countdown;
     if (frozen) { // en la cuenta regresiva nadie se mueve (pero se registra el salto)
         car.jumpHeld = input.brake;
@@ -859,7 +972,10 @@ void OpenWorld::update(const ShipInput& input, float dt, Particles& particles) {
             break;
         case Phase::Goal:
             phaseTimer -= dt;
-            if (phaseTimer <= 0.0f) {
+            if (phaseTimer <= 0.0f && training()) { // el balon vuelve al centro
+                resetBall();
+                phase = Phase::Free;
+            } else if (phaseTimer <= 0.0f) {
                 if (overtime || clock <= 0.0f) phase = Phase::Finished;
                 else kickoff();
             }
@@ -869,12 +985,15 @@ void OpenWorld::update(const ShipInput& input, float dt, Particles& particles) {
             if (phaseTimer <= 0.0f) phase = Phase::Play;
             break;
         case Phase::Finished:
+        case Phase::Free:
             break;
     }
+    if (raceRunning) raceTimer += dt;
+    if (finishFlash > 0.0f) finishFlash -= dt;
 
     // Estela del boost de los dos carros.
     GroundCar* cars[2] = {&car, &rival};
-    for (int k = 0; k < 2; ++k) {
+    for (int k = 0; k < (training() ? 1 : 2); ++k) {
         const GroundCar& c = *cars[k];
         if (c.boosting) {
             Mat4 m = c.modelMatrix();
@@ -922,8 +1041,9 @@ void OpenWorld::snapCamera() {
 // ---------------------------------------------------------------- dibujo
 
 // Cielo de dia: degradado del horizonte al cenit, Albor (la estrella blanca,
-// enorme vista desde aqui) con su halo, y Cobalto como una luna en el cielo.
-static void drawSky(Framebuffer& fb, const Uniforms& u, const Vec3& sun) {
+// enorme vista desde aqui) con su halo, y el otro planeta del minijuego como
+// una luna en el cielo (del color moonColor).
+static void drawSky(Framebuffer& fb, const Uniforms& u, const Vec3& sun, const Vec3& moonColor) {
     const int W = fb.width(), H = fb.height();
     Vec3 right{u.view.m[0][0], u.view.m[0][1], u.view.m[0][2]};
     Vec3 up{u.view.m[1][0], u.view.m[1][1], u.view.m[1][2]};
@@ -948,12 +1068,12 @@ static void drawSky(Framebuffer& fb, const Uniforms& u, const Vec3& sun) {
                 }
                 if (s > sunCos) c = lerp(Vec3{1.0f, 1.0f, 1.0f}, Vec3{0.85f, 0.92f, 1.0f}, (1.0f - s) / (1.0f - sunCos) * 0.6f);
                 float m = dot(d, moon);
-                if (m > moonCos) { // Cobalto: disco iluminado desde Albor
+                if (m > moonCos) { // la luna: disco iluminado desde Albor
                     Vec3 o = (d - moon * m) * (1.0f / moonSin);
                     float r2 = std::min(1.0f, dot(o, o));
                     Vec3 n = o - moon * std::sqrt(1.0f - r2);
                     float lit = std::max(0.0f, dot(n, sun));
-                    c = lerp(c, Vec3{0.25f, 0.45f, 0.85f} * (0.2f + 0.9f * lit), 0.85f);
+                    c = lerp(c, moonColor * (0.2f + 0.9f * lit), 0.85f);
                 }
                 uint32_t r = (uint32_t)(clampf(c.x, 0.0f, 1.0f) * 255.0f);
                 uint32_t g = (uint32_t)(clampf(c.y, 0.0f, 1.0f) * 255.0f);
@@ -967,7 +1087,9 @@ static void drawSky(Framebuffer& fb, const Uniforms& u, const Vec3& sun) {
 void OpenWorld::draw(Framebuffer& fb, Uniforms& u, RenderStats& stats, const CarAssets& assets, float time) const {
     u.lightPos = sunDirection * 100000.0f;
     sunDir = sunDirection;
-    drawSky(fb, u, sunDirection);
+    // En Arena se ve Entrenamiento en el cielo (azul) y al reves (el balon gris).
+    meadow = training() ? Vec3{0.2f, 0.42f, 0.62f} : Vec3{0.27f, 0.52f, 0.2f};
+    drawSky(fb, u, sunDirection, training() ? Vec3{0.85f, 0.86f, 0.9f} : Vec3{0.25f, 0.45f, 0.85f});
 
     u.model = Mat4::identity();
     for (size_t i = 0; i < terrain.size(); ++i) {
@@ -999,6 +1121,14 @@ void OpenWorld::draw(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Car
         drawMesh(fb, p.cooldown > 0.0f ? padEmpty : padActive, u, worldShader, stats);
     }
 
+    // Anillos de la carrera (los ya cruzados no se dibujan).
+    for (int i = 0; i < (int)gates.size(); ++i) {
+        if (raceRunning && i < nextGate) continue;
+        if (!sphereInFrustum(u, gates[i].position, RING_RADIUS + 0.4f)) continue;
+        u.model = basisFromY(gates[i].axis, gates[i].position);
+        drawMesh(fb, i == nextGate ? ringNext : ringLater, u, worldShader, stats);
+    }
+
     // Sombras (discos que oscurecen el suelo, sin escribir profundidad).
     bool cull = u.cullBackFaces;
     u.cullBackFaces = false;
@@ -1010,6 +1140,7 @@ void OpenWorld::draw(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Car
         drawMesh(fb, shadowDisc, u, shadowShader, stats);
     }
     for (const GroundCar* c : {&car, &rival}) {
+        if (training() && c == &rival) continue;
         float g = groundHeight(c->position.x, c->position.z) + 0.04f;
         u.model = translate(Vec3{c->position.x, g, c->position.z}) * rotateY(c->yaw) * scale3({0.5f, 1.0f, 0.85f});
         drawMesh(fb, shadowDisc, u, shadowShader, stats);
@@ -1027,7 +1158,7 @@ void OpenWorld::draw(Framebuffer& fb, Uniforms& u, RenderStats& stats, const Car
 
     // Carros: el modelo reducido si se ven pequenos.
     const GroundCar* cars[2] = {&car, &rival};
-    for (int k = 0; k < 2; ++k) {
+    for (int k = 0; k < (training() ? 1 : 2); ++k) {
         const GroundCar& c = *cars[k];
         Vec3 center = c.position + c.up * WHEEL_OFFSET;
         if (!sphereInFrustum(u, center, 0.9f)) {
@@ -1060,33 +1191,57 @@ void OpenWorld::drawHud(Framebuffer& fb, float fps, float frameMs, const RenderS
     const int W = fb.width(), H = fb.height();
     char line[128];
 
-    // Marcador: AZUL n   m:ss   n NARANJA
-    darkenRect(fb, W / 2 - 150, 6, 300, 40, 0.55f);
-    char blueText[16], orangeText[16], clockText[16];
-    std::snprintf(blueText, sizeof(blueText), "AZUL %d", blue);
-    std::snprintf(orangeText, sizeof(orangeText), "%d NARANJA", orange);
-    int secs = (int)std::ceil(clock);
-    std::snprintf(clockText, sizeof(clockText), "%d:%02d", secs / 60, secs % 60);
-    drawText(fb, W / 2 - 140, 12, blueText, BLUE, 2);
-    drawText(fb, W / 2 + 140 - textWidth(orangeText, 2), 12, orangeText, ORANGE, 2);
-    centered(fb, 12, overtime ? "+" : clockText, WHITE, 2);
-    if (overtime) centered(fb, 32, "TIEMPO EXTRA: EL SIGUIENTE GOL GANA", GOLD);
+    if (training()) {
+        // Carrera de anillos y goles de practica.
+        darkenRect(fb, W / 2 - 170, 6, 340, 52, 0.55f);
+        centered(fb, 11, "ENTRENAMIENTO - ANILLOS Y TIROS", GREY);
+        if (raceRunning) {
+            std::snprintf(line, sizeof(line), "ANILLO %d/%d   %.1f S", nextGate, RING_COUNT, raceTimer);
+            centered(fb, 22, line, GOLD, 2);
+        } else {
+            centered(fb, 22, "CRUZA EL ANILLO DORADO", GOLD, 2);
+        }
+        float toNext = gates.empty() ? 0.0f : length(gates[nextGate].position - car.position);
+        if (raceBest > 0.0f)
+            std::snprintf(line, sizeof(line), "MEJOR %.1f S   SIGUIENTE A %.0f   GOLES %d", raceBest, toNext, shots);
+        else std::snprintf(line, sizeof(line), "SIGUIENTE ANILLO A %.0f   GOLES DE PRACTICA %d", toNext, shots);
+        centered(fb, 44, line, WHITE);
+        if (finishFlash > 0.0f) {
+            std::snprintf(line, sizeof(line), "TIEMPO %.1f S", raceLast);
+            centered(fb, H / 2 - 70, line, 0xFF60E880, 4);
+            if (raceLast <= raceBest) centered(fb, H / 2 - 32, "NUEVO RECORD", GOLD, 2);
+        } else if (phase == Phase::Goal) {
+            centered(fb, H / 2 - 70, "GOL!", BLUE, 6);
+        }
+    } else {
+        // Marcador: AZUL n   m:ss   n NARANJA
+        darkenRect(fb, W / 2 - 150, 6, 300, 40, 0.55f);
+        char blueText[16], orangeText[16], clockText[16];
+        std::snprintf(blueText, sizeof(blueText), "AZUL %d", blue);
+        std::snprintf(orangeText, sizeof(orangeText), "%d NARANJA", orange);
+        int secs = (int)std::ceil(clock);
+        std::snprintf(clockText, sizeof(clockText), "%d:%02d", secs / 60, secs % 60);
+        drawText(fb, W / 2 - 140, 12, blueText, BLUE, 2);
+        drawText(fb, W / 2 + 140 - textWidth(orangeText, 2), 12, orangeText, ORANGE, 2);
+        centered(fb, 12, overtime ? "+" : clockText, WHITE, 2);
+        if (overtime) centered(fb, 32, "TIEMPO EXTRA: EL SIGUIENTE GOL GANA", GOLD);
 
-    // Mensajes del partido.
-    if (phase == Phase::Waiting) {
-        float dx = car.position.x - FIELD_W, dz = car.position.z;
-        std::snprintf(line, sizeof(line), "ENTRA AL ESTADIO POR LAS PUERTAS LATERALES  (%.0f)", std::sqrt(dx * dx + dz * dz));
-        darkenRect(fb, W / 2 - 170, 52, 340, 16, 0.5f);
-        centered(fb, 56, line, WHITE);
-    } else if (phase == Phase::Countdown) {
-        std::snprintf(line, sizeof(line), "%d", (int)std::ceil(phaseTimer));
-        centered(fb, H / 2 - 70, line, WHITE, 7);
-    } else if (phase == Phase::Goal) {
-        centered(fb, H / 2 - 70, lastGoalBlue ? "GOL!" : "GOL NARANJA", lastGoalBlue ? BLUE : ORANGE, 6);
-    } else if (phase == Phase::Finished) {
-        const char* msg = blue > orange ? "GANASTE!" : "PERDISTE";
-        centered(fb, H / 2 - 70, msg, blue > orange ? GOLD : ORANGE, 6);
-        centered(fb, H / 2 - 20, "ENTER: OTRO PARTIDO", WHITE, 2);
+        // Mensajes del partido.
+        if (phase == Phase::Waiting) {
+            float dx = car.position.x - FIELD_W, dz = car.position.z;
+            std::snprintf(line, sizeof(line), "ENTRA AL ESTADIO POR LAS PUERTAS LATERALES  (%.0f)", std::sqrt(dx * dx + dz * dz));
+            darkenRect(fb, W / 2 - 170, 52, 340, 16, 0.5f);
+            centered(fb, 56, line, WHITE);
+        } else if (phase == Phase::Countdown) {
+            std::snprintf(line, sizeof(line), "%d", (int)std::ceil(phaseTimer));
+            centered(fb, H / 2 - 70, line, WHITE, 7);
+        } else if (phase == Phase::Goal) {
+            centered(fb, H / 2 - 70, lastGoalBlue ? "GOL!" : "GOL NARANJA", lastGoalBlue ? BLUE : ORANGE, 6);
+        } else if (phase == Phase::Finished) {
+            const char* msg = blue > orange ? "GANASTE!" : "PERDISTE";
+            centered(fb, H / 2 - 70, msg, blue > orange ? GOLD : ORANGE, 6);
+            centered(fb, H / 2 - 20, "ENTER: OTRO PARTIDO", WHITE, 2);
+        }
     }
 
     // Boost (abajo a la derecha, como en Rocket League) y velocidad.
@@ -1099,7 +1254,7 @@ void OpenWorld::drawHud(Framebuffer& fb, float fps, float frameMs, const RenderS
 
     // Lugar, rendimiento y ayuda.
     darkenRect(fb, 8, 6, 210, 30, 0.55f);
-    drawText(fb, 14, 11, "ARENA - MUNDO ABIERTO", WHITE);
+    drawText(fb, 14, 11, training() ? "ENTRENAMIENTO - MUNDO ABIERTO" : "ARENA - MUNDO ABIERTO", WHITE);
     std::snprintf(line, sizeof(line), "CAMARA AL BALON %s", ballCamera ? "SI" : "NO");
     drawText(fb, 14, 23, line, ballCamera ? GOLD : GREY);
     std::snprintf(line, sizeof(line), "FPS %.0f  %.1f MS  TRIS %d", fps, frameMs, stats.trianglesIn);
@@ -1114,8 +1269,8 @@ void OpenWorld::drawHud(Framebuffer& fb, float fps, float frameMs, const RenderS
             "ESPACIO    SALTAR (OTRA VEZ: FLIP)",
             "^ / ~      NARIZ EN EL AIRE (+BOOST: VOLAR)",
             "C          CAMARA AL BALON",
-            "ENTER      OTRO PARTIDO",
-            "R          VOLVER A LA ENTRADA",
+            "ENTER      OTRO PARTIDO / REINICIAR",
+            "R          VOLVER AL INICIO",
             "U          DESPEGAR AL ESPACIO",
         };
         const int lines = (int)(sizeof(help) / sizeof(help[0]));

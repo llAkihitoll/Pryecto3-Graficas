@@ -36,6 +36,7 @@ void CelestialBody::buildLods(const Material& material) {
 }
 
 int CelestialBody::chooseLod(float screenRadius) const {
+    if (lods.size() == 1) return 0; // un solo nivel (los cuerpos de cubos): siempre el mismo
     for (int i = 0; i < LOD_COUNT; ++i) {
         if (screenRadius >= LOD_MIN_PIXELS[i]) return i;
     }

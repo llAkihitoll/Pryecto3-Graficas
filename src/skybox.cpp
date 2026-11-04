@@ -85,6 +85,8 @@ void Skybox::bake(unsigned seed, int size, const SkyPalette& palette) {
 
     sky.bake(size, [&](const Vec3& p) {
         Vec3 color = palette.background;
+        // Bruma: el color de la paleta en todo el cielo, mas fuerte donde el ruido es alto.
+        color += palette.haze * (0.45f + 0.55f * noise.fbm(p * 1.8f + Vec3{3.0f, 7.0f, 1.0f}, 4));
 
         // Via Lactea: brillo segun que tan cerca del plano, con grumos de
         // estrellas (fbm) y canales de polvo oscuro (donde el ruido cruza cero).

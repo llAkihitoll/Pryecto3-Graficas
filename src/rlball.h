@@ -14,6 +14,10 @@
 // tex.color guarda el color y tex.mask el brillo especular de cada parte.
 void bakeRocketBall(PlanetTextures& tex, int size);
 
+// El mismo diseno sin los detalles finos (hexagonos y estrias): el color de
+// la parte en esa direccion y su brillo. Lo usa el planeta de cubos.
+Vec3 rocketBallFlatColor(const Vec3& dir, float& shine);
+
 // Ilumina un punto de esa superficie (color y brillo leidos del cubemap):
 // Lambert, Blinn-Phong segun el material y un borde Fresnel azulado.
 // ambient: luz minima en el lado de noche.

@@ -76,7 +76,7 @@ inline float keplerPeriod(float orbitRadius) { return KEPLER_K * std::pow(orbitR
 
 // Indices de los planetas con minijuego en el universo alterno.
 const int ALT_ARENA = 1;   // futbol estilo Rocket League
-const int ALT_COBALT = 2;  // carrera de anillos
+const int ALT_TRAINING = 2; // Entrenamiento: anillos y tiros de practica
 
 struct Scene {
     std::vector<CelestialBody> bodies;
@@ -101,12 +101,19 @@ struct Scene {
     void build(unsigned propSeed);
 
     // Universo alterno: estrella blanca, dos planetas con minijuego (Arena y
-    // Cobalto), otro cielo y un agujero negro para regresar (alternate.cpp).
+    // Entrenamiento), otro cielo y un agujero negro para regresar (alternate.cpp).
     void buildAlternate();
 
     // Estrellas del fondo con esa semilla. fantasy: colores lila, rosa y
     // violeta en vez de los de la temperatura (universo alterno).
     void makeStars(unsigned seed, int count, bool fantasy = false);
+
+    // Universo alterno: estrellas de decoracion y galaxias hechas de cubos
+    // (lejos, alrededor de todo el sistema). Las galaxias giran despacio.
+    Mesh voxelStars;
+    std::vector<Mesh> voxelGalaxies;
+    std::vector<Mat4> galaxyFrames; // posicion e inclinacion de cada galaxia
+    void drawVoxelDecor(Framebuffer& fb, Uniforms& u, RenderStats& stats) const;
 
     const CelestialBody* blackHole() const { return blackHoleIndex >= 0 ? &bodies[blackHoleIndex] : nullptr; }
 

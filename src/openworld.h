@@ -9,12 +9,14 @@
 #include "renderer.h"
 #include "ship.h"
 
-// Mundo abierto de Arena: al aterrizar en el planeta se cambia a esta escena
-// plana (a escala del carro, que mide ~1.4). Hay colinas, arboles, rocas y
-// montanas en el borde, y en el centro un estadio como el de Rocket League:
-// cancha con paredes, dos porterias, pads de boost y un rival naranja que
-// maneja la computadora. Aqui el carro maneja por el suelo: acelera, gira,
-// salta, hace flips y puede volar con el boost.
+// Mundo abierto: al aterrizar en Arena o en Entrenamiento se cambia a esta
+// escena plana (a escala del carro, que mide ~1.4). Hay colinas, arboles,
+// rocas y montanas en el borde, y en el centro un estadio como el de Rocket
+// League con paredes, dos porterias y pads de boost. Aqui el carro maneja por
+// el suelo: acelera, gira, salta, hace flips y puede volar con el boost.
+//   - Arena: partido de 3 minutos contra un rival naranja que maneja la computadora.
+//   - Entrenamiento: sin rival; tiros de practica en el estadio y una carrera
+//     de anillos alrededor (unos se cruzan manejando, otros saltando o volando).
 
 // Modelos del carro para dibujar los dos equipos ([0] completo, [1] reducido).
 struct CarAssets {
@@ -50,10 +52,14 @@ struct GroundCar {
 
 class OpenWorld {
 public:
-    // Terreno, estadio, arboles y rocas (con semilla fija).
-    void build(unsigned seed);
+    enum class Kind { Arena, Training };
 
-    // Al aterrizar: el carro aparece afuera del estadio, frente a una entrada.
+    // Terreno, estadio, arboles y rocas (con semilla fija).
+    void build(unsigned seed, Kind kind);
+    bool training() const { return kind == Kind::Training; }
+
+    // Al aterrizar: el carro aparece afuera del estadio, frente a una entrada
+    // (en Entrenamiento, frente al primer anillo).
     void enter();
     // Pruebas: el carro en la posicion de saque, dentro del estadio.
     void placeAtKickoff();
@@ -66,8 +72,8 @@ public:
     void draw(Framebuffer& fb, Uniforms& u, RenderStats& stats, const CarAssets& car, float time) const;
     void drawHud(Framebuffer& fb, float fps, float frameMs, const RenderStats& stats, bool showHelp) const;
 
-    void restartMatch(); // Enter: partido nuevo
-    void respawn();      // R: volver a la entrada del estadio
+    void restartMatch(); // Enter: partido nuevo (Entrenamiento: reinicia la carrera y el balon)
+    void respawn();      // R: volver al punto de llegada
     float groundHeight(float x, float z) const;
 
     bool ballCamera = false; // tecla C: la camara mira al balon
@@ -81,6 +87,9 @@ public:
     int blueScore() const { return blue; }
     int orangeScore() const { return orange; }
     int ballTouches() const { return touches; }
+    int practiceGoals() const { return shots; }
+    int nextRing() const { return nextGate; }
+    float bestRingTime() const { return raceBest; }
     bool playerInStadium() const;
 
 private:
@@ -96,7 +105,21 @@ private:
         Vec3 position;
         float cooldown = 0.0f; // segundos para que vuelva a estar lleno
     };
-    enum class Phase { Waiting, Play, Goal, Countdown, Finished };
+    enum class Phase { Waiting, Play, Goal, Countdown, Finished, Free }; // Free = entrenamiento
+    // Anillo de la carrera de Entrenamiento.
+    struct Gate {
+        Vec3 position;
+        Vec3 axis; // direccion en que hay que cruzarlo
+    };
+
+    Kind kind = Kind::Arena;
+    std::vector<Gate> gates;
+    Mesh ringNext, ringLater;
+    int nextGate = 0;
+    bool raceRunning = false;
+    float raceTimer = 0.0f, raceBest = 0.0f, raceLast = 0.0f;
+    float finishFlash = 0.0f; // segundos que se muestra el tiempo al terminar
+    int shots = 0;            // goles de practica
 
     Noise noise{0}; // relieve del terreno
     std::vector<Mesh> terrain;      // trozos del terreno (se descartan por separado)
@@ -140,4 +163,7 @@ private:
     void kickoff();
     void scoreGoal(bool blueScored, Particles& particles);
     void updateCamera(float dt);
+    void buildGates();
+    void checkGates();
+    void resetBall();
 };
