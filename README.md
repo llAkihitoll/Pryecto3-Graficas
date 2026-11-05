@@ -39,6 +39,7 @@ dos planetas con **minijuego**:
 | **Galaga** | Un planeta con **forma de la nave de Galaga**. Al aterrizar se juega **Galaga**: enemigos que entran en formación y se lanzan en picada |
 | **Centipede** | Un planeta con **forma de oruga** (segmentos verdes, cabeza rosa, antenas y patitas). Al aterrizar se juega **Centipede**: el ciempiés baja entre hongos y se parte al dispararle |
 | **Snake** | Un planeta con **forma de serpiente enrollada** que levanta la cabeza. Al aterrizar se juega **Snake**: comer frutas, crecer y no chocar |
+| **Doom** | El último y más lejano: una **cabeza de demonio** con cuernos de hueso, ojos amarillos y colmillos. Al aterrizar se juega **Infierno**, disparos en primera persona al estilo de *Doom*: oleadas de demonios en una fortaleza con lava |
 | **Entrenamiento** | Al aterrizar se entra a **su propio mundo abierto** (praderas azules): el mismo estadio sin rival para **tiros de práctica**, y una **carrera de anillos** contra reloj alrededor, con anillos a distintas alturas (unos se cruzan manejando, otros saltando o volando con boost) |
 
 Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
@@ -58,7 +59,8 @@ Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
 | ![Planeta Galaga con forma de nave](docs/capturas/25_planeta_galaga.png) | ![Juego de Pac-Man en cubos](docs/capturas/22_pacman.png) |
 | ![Juego de Galaga en cubos](docs/capturas/23_galaga.png) | ![Planeta Centipede con forma de oruga](docs/capturas/26_planeta_centipede.png) |
 | ![Planeta Snake con forma de serpiente](docs/capturas/27_planeta_snake.png) | ![Juego de Centipede en cubos](docs/capturas/28_centipede.png) |
-| ![Juego de Snake en cubos](docs/capturas/29_snake.png) | |
+| ![Juego de Snake en cubos](docs/capturas/29_snake.png) | ![Planeta Doom con forma de cabeza de demonio](docs/capturas/30_planeta_doom.png) |
+| ![Juego Infierno en primera persona](docs/capturas/31_infierno.png) | |
 
 ---
 
@@ -153,7 +155,7 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `--arena` | Empieza en el mundo abierto de Arena, afuera del estadio |
 | `--kickoff` | Con `--arena`: empieza en el saque, dentro del estadio |
 | `--training` | Empieza en el mundo abierto de Entrenamiento, frente al primer anillo |
-| `--pacman` / `--galaga` / `--centipede` / `--snake` | Empieza en el juego de ese planeta (`--alt --near 4` a `--near 7`: cerca del planeta) |
+| `--pacman` / `--galaga` / `--centipede` / `--snake` / `--infierno` | Empieza en el juego de ese planeta (`--alt --near 4` a `--near 8`: cerca del planeta) |
 | `--look yaw pitch` | Gira la cámara alrededor del carro (grados) en la captura |
 | `--zoom D` | Distancia de la cámara al carro en la captura |
 
@@ -201,12 +203,50 @@ En los **mundos abiertos** de Arena y Entrenamiento los controles son los de Roc
 | `R` | Volver al punto de llegada |
 | `U` | Despegar y volver al espacio |
 
+### Control de Xbox
+
+Con un control de Xbox (o cualquiera compatible) conectado por cable o Bluetooth se maneja el carro
+igual que en Rocket League y se juegan los juegos de arcade. Se puede conectar o desconectar mientras
+el juego está abierto y se puede usar junto con el teclado. La cámara y los demás atajos (`R`, `J`,
+`T`, …) siguen en el teclado y el ratón.
+
+| Botón | En el espacio | En Arena y Entrenamiento |
+|---|---|---|
+| `RT` / `LT` | Acelerar / frenar y reversa (con presión: medio gatillo es media potencia) | Igual |
+| Stick izquierdo ←/→ | Girar | Girar (y dirección del flip) |
+| Stick izquierdo ↑/↓ | Nariz arriba / abajo (en modo superficie: subir o bajar) | En el aire: nariz arriba / abajo |
+| `LB` / `RB` | Rodar a la izquierda / derecha | — |
+| `A` | Freno fuerte | Saltar; en el aire, otra vez: flip |
+| `B` | Boost | Boost |
+| `Y` | Activar o desactivar el modo superficie (para aterrizar), como `F` | — |
+| `Start` | — | Empezar otro partido, como `Enter` |
+| `View` (el de los dos cuadros) | — | Despegar y volver al espacio, como `U` |
+
+En los juegos de arcade:
+
+| Botón | Pac-Man | Galaga | Centipede | Snake |
+|---|---|---|---|---|
+| Stick izquierdo o cruceta | Mover a Pac-Man | ←/→: mover la nave | Mover al tirador | Girar la serpiente |
+| `A` | — | Disparar | Disparar | — |
+| `Start` | Jugar de nuevo | Jugar de nuevo | Jugar de nuevo | Jugar de nuevo |
+| `View` | Despegar | Despegar | Despegar | Despegar |
+
+En Pac-Man y Snake el stick cuenta solo la dirección a la que más se empuja, para que una diagonal
+no cambie de dirección sin querer.
+
+En **Infierno** el control funciona como en un juego de disparos: stick izquierdo para caminar
+(adelante, atrás y de lado), stick derecho para girar, `RT` o `A` para disparar, y la cruceta
+también camina y gira. `Start` y `View` funcionan igual que en los otros juegos.
+
 En los **juegos de arcade** (`Enter` o `R`: jugar de nuevo; `U`: despegar y volver al espacio):
 
 | Tecla | Pac-Man | Galaga | Centipede | Snake |
 |---|---|---|---|---|
 | `W` `A` `S` `D` o flechas | Mover a Pac-Man | `A` / `D`: mover la nave | Mover al tirador en su zona | Girar la serpiente |
 | `Espacio` | — | Disparar (hasta 2 a la vez) | Disparar | — |
+
+En **Infierno** (primera persona): `W` / `S` o `↑` / `↓` caminar, `A` / `D` o `←` / `→` girar,
+`Q` / `E` paso de lado y `Espacio` disparar.
 
 ### La cámara
 
@@ -254,6 +294,7 @@ Agujero negro y minijuegos (después del recorrido anterior):
 | Entrar por la puerta lateral y jugar (`Espacio` salta, `C` cámara al balón) | Partido contra el rival naranja: saque, golpes, flips, pads de boost y explosión de gol |
 | Pulsar `U` | Despegue de vuelta al espacio |
 | Bajar a Pac-Man, Galaga, Centipede o Snake hasta tocar el suelo | Su juego de arcade en cubos sobre el cielo morado |
+| Bajar a Doom hasta tocar el suelo | Infierno: la fortaleza en primera persona, a cielo abierto bajo el cielo morado |
 | Bajar a Entrenamiento hasta tocar el suelo y cruzar el anillo dorado | Su mundo abierto: carrera de anillos con reloj y mejor tiempo, y tiros de práctica en el estadio |
 | Subir hasta *Regreso* (o `J`) y entrar | Vuelta al sistema solar normal |
 
@@ -300,7 +341,7 @@ src/
                       balón, rival y carrera de anillos
   rlball.*            Superficie del balón de Rocket League (planeta Arena y balón del estadio)
   voxels.*            Planetas, estrella, estrellas, galaxias y sprites de cubos del universo alterno
-  arcade.*            Juegos de Pac-Man, Galaga, Centipede y Snake (planetas de arcade)
+  arcade.*            Juegos de Pac-Man, Galaga, Centipede, Snake e Infierno (planetas de arcade)
   mesh_builder.h      Ayudante para construir modelos en código con caras planas
 ```
 
@@ -505,6 +546,40 @@ el cielo de fondo sigue suave.
   y la acelera un 5 %. Las teclas se guardan en orden (hasta dos) para hacer giros rápidos, y no se
   puede dar media vuelta. Chocar con la orilla o con su cuerpo termina la partida.
 
+### Infierno: disparos en primera persona ([arcade.cpp](src/arcade.cpp))
+
+Un juego al estilo de *Doom*. El mapa, los demonios y el arma son diseños propios.
+
+- **Planeta Doom:** una cabeza roja de cubos con manchas, dos cuernos de hueso que se abren y se
+  curvan hacia adentro (con anillos y la punta oscura), orejas puntiagudas, ojos amarillos que
+  brillan con pupila de rendija bajo unas cejas enojadas, y la boca abierta con colmillos y el
+  fondo de lava. Está hecho con cubos de cualquier forma, como la oruga y la serpiente.
+- **El mapa:** una fortaleza de 25 × 25 celdas a cielo abierto (arriba se ve el cielo morado con
+  sus galaxias de cubos). Los muros son cubos de piedra de 0.5 en tres tonos, algunos con runas
+  magenta que brillan. Hay charcos de lava que laten (se pueden pisar, pero quitan 15 de salud por
+  segundo) y una niebla morada que funde lo lejano con el cielo.
+- **Movimiento:** el jugador es un círculo que choca con los muros y se desliza a lo largo de ellos
+  (se mueve primero en X y luego en Z). La cámara y el arma se mecen al caminar.
+- **El arma (lanzaplasma):** dispara al instante hacia el frente. Pega en el primer demonio que
+  cruza la línea de tiro antes del muro. Tiene retroceso y fogonazo, y gasta una carga de plasma
+  por disparo.
+- **Demonios** (sprites de pixel art en cubos que siempre miran al jugador; destellan en blanco al
+  recibir un disparo y al morir se aplastan contra el suelo):
+  - **Diablillo** (rojo): cuando ve al jugador se queda a distancia y le lanza bolas de fuego.
+    Aguanta 2 disparos y vale 100 puntos.
+  - **Bruto** (morado, más grande y rápido): se acerca y ataca con zarpazos. Aguanta 6 disparos y
+    vale 300 puntos. Aparece a partir de la oleada 2.
+  - Para encontrar al jugador usan un **campo de distancias**: cada cuarto de segundo se calcula,
+    con una búsqueda en anchura desde la celda del jugador, cuántos pasos hay desde cada celda sin
+    cruzar muros ni lava. Si un demonio no ve al jugador, va a la celda vecina con menos pasos y
+    así lo rodea por los pasillos. Si lo ve, va directo hacia él.
+- **Oleadas:** los demonios salen por los portales de las esquinas que están lejos del jugador
+  (máximo 10 a la vez). Cada oleada trae más, y al terminarla se ganan puntos extra, salud y plasma.
+- **Objetos:** los botiquines dan 25 de salud y las cargas amarillas dan 12 de plasma. Reaparecen
+  20 s después de tomarlos.
+- **Pantalla:** mira al centro, salud y plasma abajo, un minimapa con los demonios en rojo y un
+  destello rojo al recibir daño.
+
 ### Mundos abiertos de Arena y Entrenamiento ([openworld.cpp](src/openworld.cpp))
 
 Los dos planetas del universo alterno tienen su mundo abierto, con el mismo motor y distinta
@@ -634,7 +709,8 @@ altura del terreno) que gira con el planeta.
 
 - Los juegos de arcade son versiones simplificadas: los fantasmas de Pac-Man no van más lento en el
   túnel ni hay frutas, en Galaga los jefes no capturan la nave con su rayo, y en Centipede no hay
-  pulgas ni escorpiones.
+  pulgas ni escorpiones. Infierno tiene un solo mapa y una sola arma, y no se puede mirar hacia
+  arriba o abajo (los demonios están siempre a la altura del jugador).
 - El modelo del carro no es de autoría propia (ver *Recursos externos*).
 - Los objetos de superficie y los anillos de Aurelia no tienen colisión (el carro los puede atravesar).
 - Los asteroides no chocan entre sí y las explosiones no dejan cráteres en los planetas.
