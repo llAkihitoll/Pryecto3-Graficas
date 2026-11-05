@@ -117,6 +117,51 @@ ShipInput readKeyboard() {
     return in;
 }
 
+// Eje del control de -1 a 1, con una zona muerta para que el stick en reposo
+// no mueva el carro.
+float padAxis(SDL_GameController* pad, SDL_GameControllerAxis axis, float deadZone) {
+    float v = SDL_GameControllerGetAxis(pad, axis) / 32767.0f;
+    if (std::fabs(v) < deadZone) return 0.0f;
+    return clampf((v - (v > 0 ? deadZone : -deadZone)) / (1.0f - deadZone), -1.0f, 1.0f);
+}
+
+// Suma el control de Xbox a las teclas para manejar el carro (como en Rocket
+// League): RT acelera, LT frena / reversa, stick izquierdo gira y levanta la
+// nariz, A salta / frena, B boost, LB / RB giran sobre el eje (roll).
+void addGamepad(SDL_GameController* pad, ShipInput& in) {
+    if (!pad) return;
+    auto button = [&](SDL_GameControllerButton b) { return SDL_GameControllerGetButton(pad, b) != 0; };
+    float throttle = padAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, 0.08f) -
+                     padAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT, 0.08f);
+    float steer = -padAxis(pad, SDL_CONTROLLER_AXIS_LEFTX, 0.2f);
+    float pitch = -padAxis(pad, SDL_CONTROLLER_AXIS_LEFTY, 0.2f);
+    float roll = (float)button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) - (float)button(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+    in.throttle = clampf(in.throttle + throttle, -1.0f, 1.0f);
+    in.steer = clampf(in.steer + steer, -1.0f, 1.0f);
+    in.pitch = clampf(in.pitch + pitch, -1.0f, 1.0f);
+    in.roll = clampf(in.roll + roll, -1.0f, 1.0f);
+    in.boost = in.boost || button(SDL_CONTROLLER_BUTTON_B);
+    in.brake = in.brake || button(SDL_CONTROLLER_BUTTON_A);
+}
+
+// El control en los juegos de arcade: el stick izquierdo o la cruceta mueven
+// (arriba = W, izquierda = A) y A dispara. Del stick solo cuenta el eje que mas
+// se empuja, si el otro va mucho menos: asi en Pac-Man y Snake una diagonal
+// casi horizontal no se lee como "arriba".
+void addGamepadArcade(SDL_GameController* pad, ShipInput& in) {
+    if (!pad) return;
+    auto button = [&](SDL_GameControllerButton b) { return SDL_GameControllerGetButton(pad, b) != 0; };
+    float x = -padAxis(pad, SDL_CONTROLLER_AXIS_LEFTX, 0.3f);
+    float y = -padAxis(pad, SDL_CONTROLLER_AXIS_LEFTY, 0.3f);
+    if (std::fabs(y) < 0.6f * std::fabs(x)) y = 0.0f;
+    else if (std::fabs(x) < 0.6f * std::fabs(y)) x = 0.0f;
+    x += (float)button(SDL_CONTROLLER_BUTTON_DPAD_LEFT) - (float)button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+    y += (float)button(SDL_CONTROLLER_BUTTON_DPAD_UP) - (float)button(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+    in.throttle = clampf(in.throttle + y, -1.0f, 1.0f);
+    in.steer = clampf(in.steer + x, -1.0f, 1.0f);
+    in.brake = in.brake || button(SDL_CONTROLLER_BUTTON_A);
+}
+
 // Esferas de colision de todos los cuerpos en este instante. En los planetas
 // el carro empieza a frenar a 2.5 radios de altitud, entra al modo superficie
 // a 1.5 radios y su gravedad solo alcanza hasta 3 radios del centro. El sol no
@@ -333,7 +378,7 @@ int main(int argc, char* argv[]) {
         scene = &altScene;
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
@@ -669,6 +714,8 @@ int main(int argc, char* argv[]) {
     bool helpTouched = false;
     int framesCounted = 0;
 
+    SDL_GameController* pad = nullptr; // control de Xbox (o compatible), si hay uno conectado
+
     Uint64 last = SDL_GetPerformanceCounter();
     bool running = true;
     int screenshotFrame = 0; // en modo captura se guarda el tercer cuadro (los primeros calientan)
@@ -686,6 +733,35 @@ int main(int argc, char* argv[]) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = false;
+            // SDL avisa de los controles ya conectados al iniciar y de los que se conectan despues.
+            if (event.type == SDL_CONTROLLERDEVICEADDED && !pad) {
+                pad = SDL_GameControllerOpen(event.cdevice.which);
+                if (pad) std::printf("Control conectado: %s\n", SDL_GameControllerName(pad));
+            }
+            if (event.type == SDL_CONTROLLERDEVICEREMOVED && pad &&
+                event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pad))) {
+                SDL_GameControllerClose(pad);
+                pad = nullptr;
+                std::printf("Control desconectado\n");
+            }
+            // Botones del control que no son de manejo: Y cambia el modo superficie
+            // (para aterrizar), Start reinicia el juego o el partido y View despega.
+            if (event.type == SDL_CONTROLLERBUTTONDOWN && pad &&
+                event.cbutton.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pad))) {
+                switch (event.cbutton.button) {
+                    case SDL_CONTROLLER_BUTTON_Y:
+                        if (!inOpenWorld && !arcade) {
+                            ship.surfaceEnabled = !ship.surfaceEnabled;
+                            std::printf("Modo superficie: %s\n", ship.surfaceEnabled ? "activado" : "desactivado");
+                        }
+                        break;
+                    case SDL_CONTROLLER_BUTTON_START:
+                        if (arcade) arcade->restart();
+                        else if (inOpenWorld) world->restartMatch();
+                        break;
+                    case SDL_CONTROLLER_BUTTON_BACK: startTakeOff(); break;
+                }
+            }
             if (event.type == SDL_MOUSEMOTION) {
                 mouseDx += (float)event.motion.xrel;
                 mouseDy += (float)event.motion.yrel;
@@ -749,6 +825,8 @@ int main(int argc, char* argv[]) {
 
         if (!screenshotPath) {
             lastInput = readKeyboard();
+            if (arcade) addGamepadArcade(pad, lastInput);
+            else addGamepad(pad, lastInput);
             simulate(lastInput, dt, looking, mouseDx, mouseDy, true);
         }
 
@@ -973,6 +1051,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    if (pad) SDL_GameControllerClose(pad);
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
