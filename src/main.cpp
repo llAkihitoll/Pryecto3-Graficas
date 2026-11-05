@@ -144,6 +144,23 @@ void addGamepad(SDL_GameController* pad, ShipInput& in) {
     in.brake = in.brake || button(SDL_CONTROLLER_BUTTON_A);
 }
 
+// El control en el juego en primera persona (Infierno): stick izquierdo
+// camina (adelante y de lado), stick derecho gira, RT o A dispara. La cruceta
+// tambien camina y gira.
+void addGamepadShooter(SDL_GameController* pad, ShipInput& in) {
+    if (!pad) return;
+    auto button = [&](SDL_GameControllerButton b) { return SDL_GameControllerGetButton(pad, b) != 0; };
+    float walk = -padAxis(pad, SDL_CONTROLLER_AXIS_LEFTY, 0.2f) + (float)button(SDL_CONTROLLER_BUTTON_DPAD_UP) -
+                 (float)button(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+    float side = padAxis(pad, SDL_CONTROLLER_AXIS_LEFTX, 0.2f);
+    float turn = -padAxis(pad, SDL_CONTROLLER_AXIS_RIGHTX, 0.15f) + (float)button(SDL_CONTROLLER_BUTTON_DPAD_LEFT) -
+                 (float)button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+    in.throttle = clampf(in.throttle + walk, -1.0f, 1.0f);
+    in.roll = clampf(in.roll + side, -1.0f, 1.0f);
+    in.steer = clampf(in.steer + turn, -1.0f, 1.0f);
+    in.brake = in.brake || button(SDL_CONTROLLER_BUTTON_A) || padAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, 0.3f) > 0.0f;
+}
+
 // El control en los juegos de arcade: el stick izquierdo o la cruceta mueven
 // (arriba = W, izquierda = A) y A dispara. Del stick solo cuenta el eje que mas
 // se empuja, si el otro va mucho menos: asi en Pac-Man y Snake una diagonal
@@ -281,7 +298,7 @@ int main(int argc, char* argv[]) {
     //   --arena                   empieza en el mundo abierto de Arena (afuera del estadio)
     //   --kickoff                 con --arena: empieza en el saque, dentro del estadio
     //   --training                empieza en el mundo abierto de Entrenamiento
-    //   --pacman / --galaga / --centipede / --snake   empieza en el juego de ese planeta
+    //   --pacman / --galaga / --centipede / --snake / --infierno   empieza en el juego de ese planeta
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f, zoom = 0.0f;
     std::string flightScript;
@@ -326,6 +343,7 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--galaga") == 0) { startAlt = true; startArcade = ALT_GALAGA; }
         else if (std::strcmp(argv[i], "--centipede") == 0) { startAlt = true; startArcade = ALT_CENTIPEDE; }
         else if (std::strcmp(argv[i], "--snake") == 0) { startAlt = true; startArcade = ALT_SNAKE; }
+        else if (std::strcmp(argv[i], "--infierno") == 0) { startAlt = true; startArcade = ALT_DEMON; }
     }
 
     // Construir la escena incluye hornear las superficies del sol y Duna.
@@ -355,10 +373,11 @@ int main(int argc, char* argv[]) {
     GalagaGame galaga;
     CentipedeGame centipede;
     SnakeGame snake;
+    InfiernoGame infierno;
     struct Joiner {
         std::thread thread;
         ~Joiner() { if (thread.joinable()) thread.join(); }
-    } altBuilder{std::thread([&altScene, &arenaWorld, &trainingWorld, &pacman, &galaga, &centipede, &snake]() {
+    } altBuilder{std::thread([&altScene, &arenaWorld, &trainingWorld, &pacman, &galaga, &centipede, &snake, &infierno]() {
         altScene.buildAlternate();
         arenaWorld.build(2026, OpenWorld::Kind::Arena);
         trainingWorld.build(77, OpenWorld::Kind::Training);
@@ -366,6 +385,7 @@ int main(int argc, char* argv[]) {
         galaga.build();
         centipede.build();
         snake.build();
+        infierno.build();
     })};
     bool altReady = false;
     auto ensureAlt = [&]() {
@@ -548,6 +568,7 @@ int main(int argc, char* argv[]) {
             case ALT_GALAGA: return &galaga;
             case ALT_CENTIPEDE: return &centipede;
             case ALT_SNAKE: return &snake;
+            case ALT_DEMON: return &infierno;
             default: return nullptr;
         }
     };
@@ -825,7 +846,8 @@ int main(int argc, char* argv[]) {
 
         if (!screenshotPath) {
             lastInput = readKeyboard();
-            if (arcade) addGamepadArcade(pad, lastInput);
+            if (arcade && arcade->firstPerson()) addGamepadShooter(pad, lastInput);
+            else if (arcade) addGamepadArcade(pad, lastInput);
             else addGamepad(pad, lastInput);
             simulate(lastInput, dt, looking, mouseDx, mouseDy, true);
         }
@@ -959,9 +981,9 @@ int main(int argc, char* argv[]) {
                 // Titulo de cada planeta con juego (en el orden de sus indices).
                 static const char* titles[] = {"", "ARENA - ESTADIO DE FUTBOL", "ENTRENAMIENTO - ANILLOS Y TIROS", "",
                                                "PAC-MAN - LABERINTO", "GALAGA - NAVES", "CENTIPEDE - ORUGA Y HONGOS",
-                                               "SNAKE - SERPIENTE"};
+                                               "SNAKE - SERPIENTE", "INFIERNO - DEMONIOS EN PRIMERA PERSONA"};
                 int n = ship.nearest;
-                if (n >= ALT_ARENA && n <= ALT_SNAKE && n != scene->blackHoleIndex && close) {
+                if (n >= ALT_ARENA && n <= ALT_DEMON && n != scene->blackHoleIndex && close) {
                     const char* title = titles[n];
                     char msg[96];
                     if (ship.surfaceMode) std::snprintf(msg, sizeof(msg), "ATERRIZANDO EN %s...", scene->bodies[n].name.c_str());

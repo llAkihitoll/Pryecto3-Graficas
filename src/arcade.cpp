@@ -1332,3 +1332,631 @@ void SnakeGame::drawHud(Framebuffer& fb, float fps, bool showHelp) const {
         drawText(fb, fb.width() - textWidth("H: AYUDA   U: DESPEGAR") - 12, H - 18, "H: AYUDA   U: DESPEGAR", HUD_GREY);
     }
 }
+
+// ============================================================== Infierno
+
+const int HELL_SIZE = 25;
+const float PLAYER_RADIUS = 0.28f, EYE_HEIGHT = 0.62f, WALL_VOXEL = 0.5f;
+const int WALL_LAYERS = 3; // los muros miden 1.5 (3 cubos de 0.5)
+// Mapa propio: # muro de piedra, R muro con runas que brillan, ~ lava (se
+// puede pisar pero quema; los demonios no la cruzan), S portal por donde
+// salen los demonios, H botiquin, A carga de plasma, P inicio del jugador.
+static const char* HELL_MAP[HELL_SIZE] = {
+    "#########################",
+    "#S....#.......A.#......S#",
+    "#.##..#..~~~....#..###..#",
+    "#.#H.....~~~.......#H...#",
+    "#.#..##R#....#R##..#....#",
+    "#....#.........#.......##",
+    "###..#..#...#..#..##....#",
+    "#.......#...#.......#...#",
+    "#..~~................~~.#",
+    "#..~~..R##.....##R..~~..#",
+    "#.......#.......#.......#",
+    "####....#...P...#....####",
+    "#S......#.......#......S#",
+    "####....###...###....####",
+    "#.......................#",
+    "#..A..#...~~~~~...#..A..#",
+    "#.....#...~~~~~...#.....#",
+    "#..####...........####..#",
+    "#.......##R...R##.......#",
+    "#..H.................H..#",
+    "###..#....#...#....#..###",
+    "#....#....#...#....#....#",
+    "#.~~.##...........##.~~.#",
+    "#S..........A..........S#",
+    "#########################",
+};
+
+// Demonios propios en pixel art (se paran de frente al jugador).
+// Diablillo: rojo, con cuernos de hueso, ojos amarillos y colmillos.
+static const std::vector<std::string> IMP_SPRITE = {
+    "H..........H", "HH........HH", ".HH.RRRR.HH.", "..HRRRRRRH..", "..RRYRRYRR..", "..RRKRRKRR..", "..RRRRRRRR..",
+    "...RWDDWR...", "....RRRR....", ".DRRRRRRRRD.", "D.RRRRRRRR.D", "D..RRDDRR..D", "...RR..RR...", "..DDD..DDD..",
+};
+// Bruto: morado oscuro, enorme, con cuernos curvos, ojos verdes y garras.
+static const std::vector<std::string> BRUTE_SPRITE = {
+    "..H..........H..", ".HH..........HH.", ".H...QQQQQQ...H.", ".HH.QPPPPPPQ.HH.", "..HHPPPPPPPPHH..", "...QPGGPPGGPQ...",
+    "...QPPPPPPPPQ...", "...QPWKKKKWPQ...", "..QQPPWPPWPPQQ..", ".QPPPPPPPPPPPPQ.", "QPPQPPPPPPPPQPPQ", "QPPQPPPQQPPPQPPQ",
+    "QPQ.PPPQQPPP.QPQ", "WW..PPP..PPP..WW", "....QQQ..QQQ....", "...QQQQ..QQQQ...",
+};
+const float IMP_PIXEL = 0.07f, BRUTE_PIXEL = 0.085f;
+const float DEMON_RADIUS[2] = {0.3f, 0.45f};
+const float DEMON_HEIGHT[2] = {14 * IMP_PIXEL, 16 * BRUTE_PIXEL};
+
+static float hellHash(int x, int y, int z) {
+    unsigned h = (unsigned)x * 73856093u ^ (unsigned)y * 19349663u ^ (unsigned)z * 83492791u;
+    h ^= h >> 13;
+    h *= 0x5bd1e995u;
+    h ^= h >> 15;
+    return (h & 0xFFFF) / 65535.0f;
+}
+
+// Que tan cerca de una arista del cubo esta el punto (como en voxels.cpp).
+static float cubeEdge(const Vec3& p, float size) {
+    if (size <= 0.0f) return 0.0f;
+    float d[3] = {p.x / size, p.y / size, p.z / size};
+    for (float& v : d) v = std::fabs(v - std::round(v));
+    std::sort(d, d + 3);
+    float t = clampf((d[1] - 0.04f) / 0.06f, 0.0f, 1.0f);
+    return 1.0f - t * t * (3.0f - 2.0f * t);
+}
+
+// Piedra de la fortaleza: luz de arriba (cada cara de los cubos con su tono),
+// orillas oscuras y niebla morada con la distancia (se funde con el cielo).
+static Vec3 hellShader(const Fragment& f, const Uniforms& u) {
+    const Material& m = *f.material;
+    const Vec3 light = normalize(Vec3{0.35f, 0.85f, 0.4f});
+    float diffuse = std::max(0.0f, dot(f.normal, light));
+    Vec3 lit = m.color * (0.45f + 0.75f * diffuse);
+    Vec3 c = lerp(lit, m.color, m.emissive) * (1.0f - 0.35f * cubeEdge(f.localPos, m.voxelSize));
+    float fog = clampf((length(f.worldPos - u.cameraPos) - 3.0f) / 16.0f, 0.0f, 0.75f);
+    return lerp(c, Vec3{0.2f, 0.07f, 0.3f}, fog);
+}
+
+// Cara de un cubo (centro c, medio lado h) que mira hacia n.
+static void cubeFace(MeshBuilder& b, const Vec3& c, float h, const Vec3& n, int mat) {
+    Vec3 a = n.x != 0.0f ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
+    Vec3 bAxis = cross(n, a);
+    Vec3 fc = c + n * h;
+    Vec3 p0 = fc - a * h - bAxis * h, p1 = fc + a * h - bAxis * h, p2 = fc + a * h + bAxis * h, p3 = fc - a * h + bAxis * h;
+    b.triangle(p0, p1, p2, mat, c);
+    b.triangle(p0, p2, p3, mat, c);
+}
+
+bool InfiernoGame::solidCell(int x, int y) const {
+    if (x < 0 || y < 0 || x >= HELL_SIZE || y >= HELL_SIZE) return true;
+    char c = map[y][x];
+    return c == '#' || c == 'R';
+}
+
+// Una celda del mapa ocupa [x, x+1] x [y, y+1] en el mundo (X, Z).
+bool InfiernoGame::blocked(float x, float z, bool demon) const {
+    int cx = (int)std::floor(x), cy = (int)std::floor(z);
+    if (solidCell(cx, cy)) return true;
+    return demon && map[cy][cx] == '~';
+}
+
+// Mueve un circulo por el mapa, primero en X y luego en Z, para que se
+// deslice a lo largo de los muros en vez de quedarse pegado.
+void InfiernoGame::moveCircle(Vec3& p, const Vec3& delta, float radius, bool demon) const {
+    auto fits = [&](float x, float z) {
+        int x0 = (int)std::floor(x - radius), x1 = (int)std::floor(x + radius);
+        int z0 = (int)std::floor(z - radius), z1 = (int)std::floor(z + radius);
+        for (int cz = z0; cz <= z1; ++cz)
+            for (int cx = x0; cx <= x1; ++cx) {
+                if (!blocked(cx + 0.5f, cz + 0.5f, demon)) continue;
+                float nx = clampf(x, (float)cx, cx + 1.0f), nz = clampf(z, (float)cz, cz + 1.0f);
+                if ((x - nx) * (x - nx) + (z - nz) * (z - nz) < radius * radius) return false;
+            }
+        return true;
+    };
+    if (fits(p.x + delta.x, p.z)) p.x += delta.x;
+    if (fits(p.x, p.z + delta.z)) p.z += delta.z;
+}
+
+bool InfiernoGame::lineOfSight(const Vec3& a, const Vec3& b) const {
+    Vec3 d{b.x - a.x, 0.0f, b.z - a.z};
+    float len = length(d);
+    int steps = (int)(len / 0.15f) + 1;
+    for (int i = 1; i < steps; ++i) {
+        float t = (float)i / steps;
+        if (solidCell((int)std::floor(a.x + d.x * t), (int)std::floor(a.z + d.z * t))) return false;
+    }
+    return true;
+}
+
+// Campo de distancias: pasos desde cada celda hasta la del jugador, sin
+// cruzar muros ni lava. Un demonio que no ve al jugador va a la celda vecina
+// con menos pasos, asi lo encuentra rodeando los muros.
+void InfiernoGame::computeFlow() {
+    flow.assign(HELL_SIZE * HELL_SIZE, -1);
+    std::vector<int> queue;
+    int start = (int)std::floor(player.z) * HELL_SIZE + (int)std::floor(player.x);
+    flow[start] = 0;
+    queue.push_back(start);
+    for (size_t i = 0; i < queue.size(); ++i) {
+        int cx = queue[i] % HELL_SIZE, cy = queue[i] / HELL_SIZE;
+        const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (const auto& d : dirs) {
+            int nx = cx + d[0], ny = cy + d[1];
+            if (solidCell(nx, ny) || map[ny][nx] == '~' || flow[ny * HELL_SIZE + nx] >= 0) continue;
+            flow[ny * HELL_SIZE + nx] = flow[queue[i]] + 1;
+            queue.push_back(ny * HELL_SIZE + nx);
+        }
+    }
+}
+
+Vec3 InfiernoGame::forward() const { return Vec3{std::sin(yaw), 0.0f, std::cos(yaw)}; }
+
+void InfiernoGame::placeCamera() {
+    float height = EYE_HEIGHT + std::sin(bob) * 0.025f * walkAmount;
+    eye = Vec3{player.x, height - fall * (height - 0.15f), player.z};
+    target = eye + forward() + Vec3{0.0f, -0.3f * fall, 0.0f};
+}
+
+void InfiernoGame::build() {
+    map.assign(HELL_MAP, HELL_MAP + HELL_SIZE);
+
+    // Muros de cubos de 0.5: solo se generan las caras que dan al aire.
+    MeshBuilder w;
+    const Vec3 stones[4] = {{0.34f, 0.16f, 0.14f}, {0.28f, 0.13f, 0.12f}, {0.4f, 0.2f, 0.16f}, {0.22f, 0.1f, 0.11f}};
+    int stone[4];
+    for (int i = 0; i < 4; ++i) {
+        stone[i] = w.material("Piedra", stones[i], 0.0f, 1.0f, 0.0f);
+        w.mesh.materials[stone[i]].voxelSize = WALL_VOXEL;
+    }
+    int rune = glowMaterial(w, Vec3{1.0f, 0.3f, 0.75f}, WALL_VOXEL);
+    const int N = HELL_SIZE * 2;
+    auto wallVoxel = [&](int i, int j, int k) {
+        if (j < 0) return true; // el suelo tapa las caras de abajo
+        if (j >= WALL_LAYERS) return false;
+        if (i < 0 || k < 0 || i >= N || k >= N) return true;
+        return solidCell(i / 2, k / 2);
+    };
+    const int dirs[6][3] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    for (int i = 0; i < N; ++i)
+        for (int k = 0; k < N; ++k)
+            for (int j = 0; j < WALL_LAYERS; ++j) {
+                if (!wallVoxel(i, j, k)) continue;
+                bool runic = map[k / 2][i / 2] == 'R' && j == 1 && (i + k) % 2 == 0;
+                int mat = runic ? rune : stone[(int)(hellHash(i, j, k) * 3.99f)];
+                Vec3 c{(i + 0.5f) * WALL_VOXEL, (j + 0.5f) * WALL_VOXEL, (k + 0.5f) * WALL_VOXEL};
+                for (const auto& d : dirs)
+                    if (!wallVoxel(i + d[0], j + d[1], k + d[2]))
+                        cubeFace(w, c, WALL_VOXEL * 0.5f, Vec3{(float)d[0], (float)d[1], (float)d[2]}, mat);
+            }
+    walls = w.mesh;
+
+    // Suelo de baldosas oscuras y charcos de lava (malla aparte: brilla y late).
+    MeshBuilder f, l;
+    const Vec3 tiles[3] = {{0.16f, 0.09f, 0.12f}, {0.2f, 0.11f, 0.14f}, {0.13f, 0.07f, 0.1f}};
+    int tile[3];
+    for (int i = 0; i < 3; ++i) {
+        tile[i] = f.material("Baldosa", tiles[i], 0.0f, 1.0f, 0.0f);
+        f.mesh.materials[tile[i]].voxelSize = WALL_VOXEL;
+    }
+    const Vec3 lavas[3] = {{1.0f, 0.45f, 0.08f}, {1.0f, 0.7f, 0.15f}, {0.9f, 0.25f, 0.05f}};
+    int lavaMat[3];
+    for (int i = 0; i < 3; ++i) lavaMat[i] = glowMaterial(l, lavas[i], WALL_VOXEL);
+    for (int i = 0; i < N; ++i)
+        for (int k = 0; k < N; ++k) {
+            char ch = map[k / 2][i / 2];
+            if (ch == '#' || ch == 'R') continue;
+            Vec3 c{(i + 0.5f) * WALL_VOXEL, -0.5f * WALL_VOXEL, (k + 0.5f) * WALL_VOXEL};
+            int pick = (int)(hellHash(i, 7, k) * 2.99f);
+            if (ch == '~') cubeFace(l, c, WALL_VOXEL * 0.5f, Vec3{0, 1, 0}, lavaMat[pick]);
+            else cubeFace(f, c, WALL_VOXEL * 0.5f, Vec3{0, 1, 0}, tile[pick]);
+        }
+    floorMesh = f.mesh;
+    lava = l.mesh;
+
+    const std::map<char, Vec3> impColors = {{'R', {0.85f, 0.15f, 0.1f}}, {'D', {0.5f, 0.06f, 0.06f}}, {'Y', {1.0f, 0.9f, 0.2f}},
+                                            {'K', {0.1f, 0.02f, 0.02f}}, {'H', {0.9f, 0.85f, 0.7f}}, {'W', {1, 1, 1}}};
+    const std::map<char, Vec3> bruteColors = {{'P', {0.45f, 0.15f, 0.55f}}, {'Q', {0.22f, 0.06f, 0.3f}}, {'G', {0.4f, 1.0f, 0.3f}},
+                                              {'K', {0.08f, 0.02f, 0.08f}}, {'H', {0.85f, 0.8f, 0.65f}}, {'W', {1, 1, 1}}};
+    demonMeshes[0] = makeVoxelSprite(IMP_SPRITE, impColors, IMP_PIXEL, 2);
+    demonMeshes[1] = makeVoxelSprite(BRUTE_SPRITE, bruteColors, BRUTE_PIXEL, 2);
+    // Al recibir un disparo destellan en blanco.
+    std::map<char, Vec3> white;
+    for (char ch : std::string("RDYKHWPQG")) white[ch] = Vec3{1.0f, 0.95f, 0.9f};
+    demonHurt[0] = makeVoxelSprite(IMP_SPRITE, white, IMP_PIXEL, 2);
+    demonHurt[1] = makeVoxelSprite(BRUTE_SPRITE, white, BRUTE_PIXEL, 2);
+
+    // Bola de fuego: cubos amarillos y naranjas.
+    MeshBuilder fb;
+    int core = glowMaterial(fb, Vec3{1.0f, 0.9f, 0.4f}, 0.0f), shell = glowMaterial(fb, Vec3{1.0f, 0.4f, 0.08f}, 0.0f);
+    box(fb, Vec3{-0.07f, -0.07f, -0.07f}, Vec3{0.07f, 0.07f, 0.07f}, core);
+    for (int a = 0; a < 3; ++a) {
+        Vec3 e{a == 0 ? 0.11f : 0.06f, a == 1 ? 0.11f : 0.06f, a == 2 ? 0.11f : 0.06f};
+        box(fb, -e, e, shell);
+    }
+    fireball = fb.mesh;
+
+    // Lanzaplasma (en el espacio de la camara, el canon hacia -Z).
+    MeshBuilder g;
+    int metal = g.material("Metal", Vec3{0.35f, 0.33f, 0.4f}, 0.0f, 1.0f, 0.0f);
+    int dark = g.material("Oscuro", Vec3{0.15f, 0.13f, 0.18f}, 0.0f, 1.0f, 0.0f);
+    int coil = glowMaterial(g, Vec3{1.0f, 0.35f, 0.85f}, 0.0f);
+    box(g, Vec3{-0.025f, -0.03f, -0.02f}, Vec3{0.025f, 0.02f, 0.09f}, metal);   // cuerpo
+    box(g, Vec3{-0.013f, -0.017f, -0.13f}, Vec3{0.013f, 0.009f, -0.02f}, dark); // canon
+    for (int i = 0; i < 3; ++i) {
+        float z = -0.035f - i * 0.03f;
+        box(g, Vec3{-0.02f, -0.024f, z - 0.008f}, Vec3{0.02f, 0.016f, z + 0.008f}, coil); // anillos de plasma
+    }
+    box(g, Vec3{-0.015f, -0.08f, 0.04f}, Vec3{0.015f, -0.03f, 0.07f}, dark); // mango
+    gun = g.mesh;
+    MeshBuilder fl;
+    int flashMat = glowMaterial(fl, Vec3{1.0f, 0.75f, 1.0f}, 0.0f);
+    box(fl, Vec3{-0.03f, -0.034f, -0.19f}, Vec3{0.03f, 0.026f, -0.13f}, flashMat);
+    flash = fl.mesh;
+
+    // Botiquin (blanco con cruz roja) y carga de plasma (amarilla con franja magenta).
+    MeshBuilder m;
+    int whiteMat = glowMaterial(m, Vec3{0.95f, 0.95f, 0.95f}, 0.0f), red = glowMaterial(m, Vec3{1.0f, 0.15f, 0.15f}, 0.0f);
+    box(m, Vec3{-0.16f, 0.0f, -0.16f}, Vec3{0.16f, 0.22f, 0.16f}, whiteMat);
+    box(m, Vec3{-0.17f, 0.08f, -0.04f}, Vec3{0.17f, 0.14f, 0.04f}, red);
+    box(m, Vec3{-0.04f, 0.08f, -0.17f}, Vec3{0.04f, 0.14f, 0.17f}, red);
+    box(m, Vec3{-0.04f, 0.0f, -0.12f}, Vec3{0.04f, 0.23f, 0.12f}, red);
+    box(m, Vec3{-0.12f, 0.0f, -0.04f}, Vec3{0.12f, 0.23f, 0.04f}, red);
+    medkit = m.mesh;
+    MeshBuilder c;
+    int brass = glowMaterial(c, Vec3{1.0f, 0.78f, 0.25f}, 0.0f), band = glowMaterial(c, Vec3{1.0f, 0.3f, 0.85f}, 0.0f);
+    box(c, Vec3{-0.1f, 0.0f, -0.1f}, Vec3{0.1f, 0.3f, 0.1f}, brass);
+    box(c, Vec3{-0.11f, 0.12f, -0.11f}, Vec3{0.11f, 0.18f, 0.11f}, band);
+    cell = c.mesh;
+
+    for (int y = 0; y < HELL_SIZE; ++y)
+        for (int x = 0; x < HELL_SIZE; ++x) {
+            char ch = map[y][x];
+            if (ch == 'P') start = Vec3{x + 0.5f, 0.0f, y + 0.5f};
+            if (ch == 'S') spawns.push_back(Vec3{x + 0.5f, 0.0f, y + 0.5f});
+            if (ch == 'H' || ch == 'A') pickups.push_back(Pickup{x, y, ch, 0.0f});
+        }
+    restart();
+}
+
+void InfiernoGame::restart() {
+    player = start;
+    yaw = PI; // mirando hacia -Z (al norte del mapa)
+    health = 100.0f;
+    ammo = 40;
+    points = 0;
+    wave = 1;
+    kills = 0;
+    fall = 0.0f;
+    hurtFlash = muzzle = recoil = 0.0f;
+    demons.clear();
+    fireballs.clear();
+    for (Pickup& p : pickups) p.respawn = 0.0f;
+    pending = pendingBrutes = 0;
+    phase = Phase::Ready;
+    phaseTimer = 2.0f;
+    computeFlow();
+    placeCamera();
+}
+
+void InfiernoGame::hurtPlayer(float amount) {
+    if (phase == Phase::GameOver) return;
+    health -= amount;
+    hurtFlash = std::min(1.0f, hurtFlash + amount / 20.0f);
+    if (health <= 0.0f) {
+        health = 0.0f;
+        phase = Phase::GameOver;
+        best = std::max(best, points);
+    }
+}
+
+// Sale un demonio por un portal que no este encima del jugador.
+void InfiernoGame::spawnDemon(Particles& particles) {
+    if (spawns.empty()) return;
+    Vec3 where = spawns[0];
+    for (int tries = 0; tries < 12; ++tries) {
+        where = spawns[(size_t)(randomUnit() * spawns.size()) % spawns.size()];
+        if (length(where - player) > 6.0f) break;
+    }
+    Demon d;
+    d.type = pendingBrutes > 0 && randomUnit() < 0.5f ? 1 : 0;
+    if (d.type == 0 && pending <= pendingBrutes) d.type = 1; // los que quedan son brutos
+    if (d.type == 1) pendingBrutes--;
+    pending--;
+    d.pos = where;
+    d.hp = d.type ? 6.0f : 2.0f;
+    d.attack = 1.0f + randomUnit();
+    demons.push_back(d);
+    particles.burst(where + Vec3{0.0f, 0.5f, 0.0f}, Vec3{0, 0, 0}, 40, 0.5f, 3.0f, 1.2f, 0.3f, 0.7f);
+}
+
+// Disparo instantaneo hacia el frente: pega en el primer demonio que cruza
+// la linea de tiro antes del muro.
+void InfiernoGame::shoot(Particles& particles) {
+    ammo--;
+    fireCooldown = 0.3f;
+    muzzle = 0.07f;
+    recoil = 1.0f;
+    Vec3 f = forward();
+    float wallT = 30.0f;
+    for (float t = 0.05f; t < 30.0f; t += 0.05f)
+        if (solidCell((int)std::floor(player.x + f.x * t), (int)std::floor(player.z + f.z * t))) {
+            wallT = t;
+            break;
+        }
+    Demon* hit = nullptr;
+    float hitT = wallT;
+    for (Demon& d : demons) {
+        if (d.dying > 0.0f) continue;
+        Vec3 rel{d.pos.x - player.x, 0.0f, d.pos.z - player.z};
+        float t = dot(rel, f);
+        if (t <= 0.0f || t >= hitT) continue;
+        if (length(rel - f * t) < DEMON_RADIUS[d.type] + 0.15f) {
+            hit = &d;
+            hitT = t;
+        }
+    }
+    Vec3 point = Vec3{player.x, 0.55f, player.z} + f * (hit ? hitT : wallT - 0.05f);
+    if (!hit) {
+        particles.burst(point, Vec3{0, 0, 0}, 10, 0.3f, 1.5f, 0.5f, 0.1f, 0.25f);
+        return;
+    }
+    hit->hp -= 1.0f;
+    hit->hurt = 0.12f;
+    particles.burst(point, Vec3{0, 0, 0}, 16, 0.5f, 2.5f, 0.6f, 0.15f, 0.35f);
+    if (hit->hp <= 0.0f) {
+        hit->dying = 0.001f;
+        points += hit->type ? 300 : 100;
+        kills++;
+        particles.burst(hit->pos + Vec3{0.0f, 0.5f, 0.0f}, Vec3{0, 0, 0}, 45, 0.8f, 3.5f, 1.2f, 0.3f, 0.7f);
+    }
+}
+
+void InfiernoGame::update(const ShipInput& in, float dt, Particles& particles) {
+    time += dt;
+    hurtFlash = std::max(0.0f, hurtFlash - dt * 1.5f);
+    muzzle -= dt;
+    recoil = std::max(0.0f, recoil - dt * 6.0f);
+    fireCooldown -= dt;
+    phaseTimer -= dt;
+    if (phase == Phase::GameOver) {
+        fall = std::min(1.0f, fall + dt * 1.5f); // cae al suelo
+        placeCamera();
+        return;
+    }
+    if ((phase == Phase::Ready || phase == Phase::WaveClear) && phaseTimer <= 0.0f) {
+        if (phase == Phase::WaveClear) wave++;
+        phase = Phase::Playing;
+        pendingBrutes = wave - 1;
+        pending = 3 + wave + pendingBrutes;
+        spawnTimer = 0.0f;
+    }
+
+    // Jugador: W / S (o flechas) camina, A / D gira, Q / E paso de lado.
+    yaw += in.steer * 2.6f * dt;
+    Vec3 f = forward(), right{-f.z, 0.0f, f.x};
+    Vec3 move = f * clampf(in.throttle + in.pitch, -1.0f, 1.0f) + right * in.roll;
+    if (length(move) > 1.0f) move = normalize(move);
+    moveCircle(player, move * 3.6f * dt, PLAYER_RADIUS, false);
+    walkAmount += ((length(move) > 0.1f ? 1.0f : 0.0f) - walkAmount) * std::min(1.0f, dt * 8.0f);
+    bob += dt * 9.0f * walkAmount;
+    if (map[(int)std::floor(player.z)][(int)std::floor(player.x)] == '~') hurtPlayer(15.0f * dt); // la lava quema
+
+    for (Pickup& p : pickups) {
+        if (p.respawn > 0.0f) {
+            p.respawn -= dt;
+            continue;
+        }
+        if (length(Vec3{p.x + 0.5f, 0.0f, p.y + 0.5f} - player) > 0.55f) continue;
+        if (p.kind == 'H' && health < 100.0f) {
+            health = std::min(100.0f, health + 25.0f);
+            p.respawn = 20.0f;
+        } else if (p.kind == 'A' && ammo < 99) {
+            ammo = std::min(99, ammo + 12);
+            p.respawn = 20.0f;
+        }
+    }
+
+    if (in.brake && fireCooldown <= 0.0f && ammo > 0 && phase != Phase::Ready) shoot(particles);
+
+    if ((flowTimer -= dt) <= 0.0f) {
+        computeFlow();
+        flowTimer = 0.25f;
+    }
+    if (phase == Phase::Playing && pending > 0 && (spawnTimer -= dt) <= 0.0f && demons.size() < 10) {
+        spawnDemon(particles);
+        spawnTimer = 1.3f;
+    }
+
+    // Demonios.
+    for (Demon& d : demons) {
+        if (d.dying > 0.0f) {
+            d.dying += dt;
+            continue;
+        }
+        d.hurt -= dt;
+        d.attack -= dt;
+        Vec3 to{player.x - d.pos.x, 0.0f, player.z - d.pos.z};
+        float dist = length(to);
+        bool sees = dist < 14.0f && lineOfSight(d.pos, player);
+        Vec3 goal = player;
+        if (!sees) {
+            // Hacia la celda vecina mas cercana al jugador segun el campo de distancias.
+            int cx = (int)std::floor(d.pos.x), cy = (int)std::floor(d.pos.z);
+            int bestSteps = flow[cy * HELL_SIZE + cx];
+            const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+            for (const auto& dd : dirs) {
+                int nx = cx + dd[0], ny = cy + dd[1];
+                int steps = solidCell(nx, ny) ? -1 : flow[ny * HELL_SIZE + nx];
+                if (steps >= 0 && (bestSteps < 0 || steps < bestSteps)) {
+                    bestSteps = steps;
+                    goal = Vec3{nx + 0.5f, 0.0f, ny + 0.5f};
+                }
+            }
+        }
+        float stopAt = d.type == 0 ? (sees ? 3.5f : 0.0f) : DEMON_RADIUS[1] + PLAYER_RADIUS;
+        Vec3 dir{goal.x - d.pos.x, 0.0f, goal.z - d.pos.z};
+        if (length(dir) > 0.01f && !(sees && dist < stopAt)) {
+            float speed = d.type ? 2.1f : 1.5f;
+            moveCircle(d.pos, normalize(dir) * speed * dt, DEMON_RADIUS[d.type], true);
+            d.walk += dt * speed * 4.0f;
+        }
+        if (d.type == 0 && sees && dist < 9.0f && d.attack <= 0.0f) {
+            // Lanza una bola de fuego hacia donde esta el jugador.
+            Vec3 aim = normalize(to);
+            fireballs.push_back(Fireball{d.pos + Vec3{0.0f, 0.55f, 0.0f} + aim * 0.4f, aim * 5.0f, 5.0f});
+            d.attack = 2.6f + randomUnit() * 1.8f;
+        }
+        if (d.type == 1 && dist < DEMON_RADIUS[1] + PLAYER_RADIUS + 0.3f && d.attack <= 0.0f) {
+            hurtPlayer(15.0f); // zarpazo
+            d.attack = 0.9f;
+        }
+    }
+    // Los demonios no se encimen entre ellos.
+    for (size_t i = 0; i < demons.size(); ++i)
+        for (size_t j = i + 1; j < demons.size(); ++j) {
+            Demon &a = demons[i], &b = demons[j];
+            if (a.dying > 0.0f || b.dying > 0.0f) continue;
+            Vec3 d{b.pos.x - a.pos.x, 0.0f, b.pos.z - a.pos.z};
+            float gap = DEMON_RADIUS[a.type] + DEMON_RADIUS[b.type], len = length(d);
+            if (len < gap && len > 1e-4f) {
+                Vec3 push = d * ((gap - len) * 0.5f / len);
+                moveCircle(a.pos, -push, DEMON_RADIUS[a.type], true);
+                moveCircle(b.pos, push, DEMON_RADIUS[b.type], true);
+            }
+        }
+    demons.erase(std::remove_if(demons.begin(), demons.end(), [](const Demon& d) { return d.dying > 0.6f; }), demons.end());
+
+    for (Fireball& b : fireballs) {
+        b.pos += b.vel * dt;
+        b.life -= dt;
+        if (solidCell((int)std::floor(b.pos.x), (int)std::floor(b.pos.z))) {
+            particles.burst(b.pos - b.vel * 0.02f, Vec3{0, 0, 0}, 14, 0.4f, 2.0f, 0.7f, 0.15f, 0.35f);
+            b.life = 0.0f;
+        } else if (length(Vec3{b.pos.x - player.x, 0.0f, b.pos.z - player.z}) < PLAYER_RADIUS + 0.12f) {
+            particles.burst(b.pos, Vec3{0, 0, 0}, 20, 0.5f, 2.5f, 0.8f, 0.15f, 0.4f);
+            hurtPlayer(8.0f);
+            b.life = 0.0f;
+        }
+    }
+    fireballs.erase(std::remove_if(fireballs.begin(), fireballs.end(), [](const Fireball& b) { return b.life <= 0.0f; }),
+                    fireballs.end());
+
+    if (phase == Phase::Playing && pending == 0 && demons.empty()) {
+        phase = Phase::WaveClear;
+        phaseTimer = 3.0f;
+        points += 500 * wave;
+        ammo = std::min(99, ammo + 10);
+        health = std::min(100.0f, health + 15.0f);
+    }
+    placeCamera();
+}
+
+void InfiernoGame::draw(Framebuffer& fb, Uniforms& u, RenderStats& stats, float t) const {
+    u.model = Mat4::identity();
+    drawMesh(fb, floorMesh, u, hellShader, stats);
+    drawMesh(fb, lava, u, voxelGlowShader, stats);
+    drawMesh(fb, walls, u, hellShader, stats);
+
+    for (const Pickup& p : pickups) {
+        if (p.respawn > 0.0f) continue;
+        Vec3 c{p.x + 0.5f, 0.08f + 0.06f * std::sin(t * 3.0f + p.x), p.y + 0.5f};
+        u.model = translate(c) * rotateY(t * 1.5f);
+        drawMesh(fb, p.kind == 'H' ? medkit : cell, u, hellShader, stats);
+    }
+    // Demonios: de frente a la camara; al morir se aplastan contra el suelo.
+    for (const Demon& d : demons) {
+        float squash = d.dying > 0.0f ? 1.0f - 0.9f * std::min(1.0f, d.dying / 0.5f) : 1.0f;
+        float hop = d.dying > 0.0f ? 0.0f : std::fabs(std::sin(d.walk)) * 0.05f;
+        float face = std::atan2(eye.x - d.pos.x, eye.z - d.pos.z);
+        u.model = translate(Vec3{d.pos.x, hop, d.pos.z}) * scale3(Vec3{1.0f, squash, 1.0f}) *
+                  translate(Vec3{0.0f, DEMON_HEIGHT[d.type] * 0.5f, 0.0f}) * rotateY(face) * rotateX(PI * 0.5f);
+        drawMesh(fb, d.hurt > 0.0f ? demonHurt[d.type] : demonMeshes[d.type], u, hellShader, stats);
+    }
+    for (const Fireball& b : fireballs) {
+        u.model = translate(b.pos) * rotateY(t * 9.0f) * rotateX(t * 7.0f);
+        drawMesh(fb, fireball, u, voxelGlowShader, stats);
+    }
+
+    // El arma, pegada a la camara (abajo a la derecha), con vaiven al caminar
+    // y retroceso al disparar.
+    if (phase == Phase::GameOver) return;
+    Vec3 f = normalize(target - eye);
+    Vec3 right = normalize(cross(f, Vec3{0, 1, 0}));
+    Vec3 up = cross(right, f);
+    float sway = std::sin(bob * 0.5f) * 0.008f * walkAmount, lift = std::fabs(std::cos(bob * 0.5f)) * 0.006f * walkAmount;
+    u.model = fromBasis(right, up, -f, eye) * translate(Vec3{0.07f + sway, -0.075f + lift, -0.3f + 0.03f * recoil}) *
+              rotateX(0.15f * recoil) * scale(0.75f);
+    drawMesh(fb, gun, u, hellShader, stats);
+    if (muzzle > 0.0f) drawMesh(fb, flash, u, voxelGlowShader, stats);
+}
+
+void InfiernoGame::drawHud(Framebuffer& fb, float fps, bool showHelp) const {
+    const int W = fb.width(), H = fb.height();
+    if (hurtFlash > 0.0f) tintScreen(fb, Vec3{0.9f, 0.05f, 0.05f}, hurtFlash * 0.45f);
+
+    // Mira al centro.
+    if (phase != Phase::GameOver) {
+        fillRect(fb, W / 2 - 6, H / 2, 4, 1, HUD_WHITE);
+        fillRect(fb, W / 2 + 3, H / 2, 4, 1, HUD_WHITE);
+        fillRect(fb, W / 2, H / 2 - 6, 1, 4, HUD_WHITE);
+        fillRect(fb, W / 2, H / 2 + 3, 1, 4, HUD_WHITE);
+    }
+
+    char line[96];
+    darkenRect(fb, 8, 6, 220, 46, 0.55f);
+    drawText(fb, 14, 11, "INFIERNO", 0xFFFF5040, 2);
+    std::snprintf(line, sizeof(line), "PUNTOS %d   RECORD %d", points, std::max(best, points));
+    drawText(fb, 14, 29, line, HUD_WHITE);
+    std::snprintf(line, sizeof(line), "OLEADA %d   DEMONIOS %d", wave, (int)demons.size() + pending);
+    drawText(fb, 14, 40, line, HUD_PINK);
+    std::snprintf(line, sizeof(line), "FPS %.0f", fps);
+    drawText(fb, W - textWidth(line) - 12, 10, line, 0xFF60E880);
+
+    // Barra de abajo: salud y plasma.
+    darkenRect(fb, 0, H - 30, W, 30, 0.6f);
+    uint32_t healthColor = health > 50.0f ? 0xFF60E880 : (health > 25.0f ? HUD_GOLD : 0xFFFF5040);
+    std::snprintf(line, sizeof(line), "SALUD %3.0f", health);
+    drawText(fb, 14, H - 23, line, healthColor, 2);
+    std::snprintf(line, sizeof(line), "PLASMA %2d", ammo);
+    drawText(fb, W - textWidth(line, 2) - 14, H - 23, line, ammo > 0 ? HUD_PINK : 0xFFFF5040, 2);
+
+    // Mapa chico (arriba a la derecha): muros, lava, objetos, demonios y el jugador.
+    const int cellPx = 3, mx = W - HELL_SIZE * cellPx - 12, my = 24;
+    darkenRect(fb, mx - 2, my - 2, HELL_SIZE * cellPx + 4, HELL_SIZE * cellPx + 4, 0.55f);
+    for (int y = 0; y < HELL_SIZE; ++y)
+        for (int x = 0; x < HELL_SIZE; ++x) {
+            char ch = map[y][x];
+            if (ch == '#' || ch == 'R') fillRect(fb, mx + x * cellPx, my + y * cellPx, cellPx, cellPx, ch == 'R' ? 0xFFB04890 : 0xFF6A4A50);
+            else if (ch == '~') fillRect(fb, mx + x * cellPx, my + y * cellPx, cellPx, cellPx, 0xFFE07020);
+        }
+    for (const Pickup& p : pickups)
+        if (p.respawn <= 0.0f) fillRect(fb, mx + p.x * cellPx + 1, my + p.y * cellPx + 1, 1, 1, p.kind == 'H' ? 0xFF60E880 : HUD_GOLD);
+    for (const Demon& d : demons)
+        if (d.dying <= 0.0f) fillRect(fb, mx + (int)(d.pos.x * cellPx) - 1, my + (int)(d.pos.z * cellPx) - 1, 2, 2, 0xFFFF3030);
+    int ppx = mx + (int)(player.x * cellPx), ppy = my + (int)(player.z * cellPx);
+    fillRect(fb, ppx - 1, ppy - 1, 3, 3, HUD_CYAN);
+    Vec3 f = forward();
+    fillRect(fb, ppx + (int)std::lround(f.x * 3.0f), ppy + (int)std::lround(f.z * 3.0f), 1, 1, HUD_WHITE);
+
+    if (phase == Phase::Ready) {
+        centered(fb, H / 2 - 50, "OLEADA 1", HUD_GOLD, 4);
+        centered(fb, H / 2 - 12, "PREPARATE", HUD_WHITE, 2);
+    }
+    if (phase == Phase::WaveClear) {
+        std::snprintf(line, sizeof(line), "OLEADA %d SUPERADA", wave);
+        centered(fb, H / 2 - 50, line, HUD_GOLD, 3);
+        centered(fb, H / 2 - 20, "+SALUD  +PLASMA", HUD_WHITE, 2);
+    }
+    if (phase == Phase::Playing && ammo == 0) centered(fb, H / 2 + 20, "SIN PLASMA: BUSCA CARGAS AMARILLAS", HUD_GOLD);
+    if (phase == Phase::GameOver) {
+        centered(fb, H / 2 - 40, "TE ATRAPARON", 0xFFFF6060, 5);
+        centered(fb, H / 2 + 4, "ENTER: JUGAR DE NUEVO", HUD_WHITE, 2);
+    }
+    if (showHelp) {
+        static const char* help[] = {"W / S  CAMINAR   A / D  GIRAR", "Q / E  PASO DE LADO", "ESPACIO  DISPARAR",
+                                     "ENTER  REINICIAR", "U  DESPEGAR AL ESPACIO", "H  OCULTAR AYUDA"};
+        darkenRect(fb, 8, 58, 200, 74, 0.6f);
+        for (int i = 0; i < 6; ++i) drawText(fb, 14, 63 + i * 11, help[i], HUD_WHITE);
+    } else {
+        drawText(fb, 14, 58, "H: AYUDA   U: DESPEGAR", HUD_GREY);
+    }
+}

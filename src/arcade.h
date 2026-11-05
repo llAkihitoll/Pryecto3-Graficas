@@ -26,6 +26,9 @@ public:
     virtual void drawHud(Framebuffer& fb, float fps, bool showHelp) const = 0;
     virtual const char* name() const = 0;
     virtual int score() const = 0;
+    // En primera persona (Infierno) el control de Xbox se usa como en un juego
+    // de disparos: un stick camina y el otro gira.
+    virtual bool firstPerson() const { return false; }
 
     Vec3 eye, target; // camara fija mirando el tablero desde arriba
 };
@@ -222,4 +225,72 @@ private:
 
     void placeFruit();
     Vec3 world(float x, float y, float height) const;
+};
+
+// Infierno: disparos en primera persona al estilo de Doom (mapa, demonios y
+// arma propios). El jugador recorre una fortaleza de piedra a cielo abierto
+// con charcos de lava (queman) y muros con runas. Los demonios llegan en
+// oleadas por los portales de las esquinas y lo buscan por el mapa (un campo
+// de distancias desde el jugador que se recalcula cada poco, asi rodean los
+// muros):
+//   diablillo (rojo): le lanza bolas de fuego cuando lo ve; 2 disparos.
+//   bruto (morado): mas grande y rapido, ataca de cerca; 6 disparos.
+// El arma (lanzaplasma) dispara al frente sin tiempo de vuelo. Botiquines y
+// cargas de plasma reaparecen 20 s despues de tomarlos. W / S caminar, A / D
+// girar, Q / E paso de lado, Espacio disparar.
+class InfiernoGame : public ArcadeGame {
+public:
+    void build() override;
+    void enter() override { restart(); }
+    void restart() override;
+    void update(const ShipInput& input, float dt, Particles& particles) override;
+    void draw(Framebuffer& fb, Uniforms& u, RenderStats& stats, float time) const override;
+    void drawHud(Framebuffer& fb, float fps, bool showHelp) const override;
+    const char* name() const override { return "Infierno"; }
+    int score() const override { return points; }
+    bool firstPerson() const override { return true; }
+
+private:
+    struct Demon {
+        int type = 0; // 0 diablillo, 1 bruto
+        Vec3 pos;
+        float hp = 0.0f, attack = 0.0f, hurt = 0.0f, dying = 0.0f, walk = 0.0f;
+    };
+    struct Fireball {
+        Vec3 pos, vel;
+        float life = 0.0f;
+    };
+    struct Pickup {
+        int x = 0, y = 0;
+        char kind = 'H'; // H botiquin, A municion
+        float respawn = 0.0f;
+    };
+    enum class Phase { Ready, Playing, WaveClear, GameOver };
+
+    std::vector<std::string> map;
+    std::vector<int> flow; // pasos desde cada celda hasta el jugador (-1 = no se llega)
+    std::vector<Demon> demons;
+    std::vector<Fireball> fireballs;
+    std::vector<Pickup> pickups;
+    std::vector<Vec3> spawns;
+    Vec3 player, start;
+    float yaw = 0.0f, health = 100.0f, flowTimer = 0.0f, fireCooldown = 0.0f, muzzle = 0.0f, recoil = 0.0f;
+    float hurtFlash = 0.0f, bob = 0.0f, walkAmount = 0.0f, fall = 0.0f, spawnTimer = 0.0f;
+    float phaseTimer = 0.0f, time = 0.0f;
+    int pending = 0, pendingBrutes = 0; // demonios de la oleada que todavia no salen
+    int ammo = 0, points = 0, best = 0, wave = 1, kills = 0;
+    Phase phase = Phase::Ready;
+
+    Mesh walls, floorMesh, lava, demonMeshes[2], demonHurt[2], fireball, gun, flash, medkit, cell;
+
+    bool solidCell(int x, int y) const;
+    bool blocked(float x, float z, bool demon) const;
+    void moveCircle(Vec3& p, const Vec3& delta, float radius, bool demon) const;
+    bool lineOfSight(const Vec3& a, const Vec3& b) const;
+    void computeFlow();
+    void spawnDemon(Particles& particles);
+    void shoot(Particles& particles);
+    void hurtPlayer(float amount);
+    Vec3 forward() const;
+    void placeCamera();
 };

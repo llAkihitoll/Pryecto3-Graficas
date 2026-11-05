@@ -81,6 +81,7 @@ const int ALT_PACMAN = 4;   // planeta con forma de Pac-Man: juego de Pac-Man
 const int ALT_GALAGA = 5;   // planeta con forma de nave: juego de Galaga
 const int ALT_CENTIPEDE = 6; // planeta con forma de oruga: juego de Centipede
 const int ALT_SNAKE = 7;     // planeta con forma de serpiente enrollada: juego de Snake
+const int ALT_DEMON = 8;     // planeta con forma de cabeza de demonio: juego Infierno (estilo Doom)
 
 struct Scene {
     std::vector<CelestialBody> bodies;
