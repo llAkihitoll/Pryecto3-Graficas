@@ -188,6 +188,21 @@ void Scene::buildAlternate() {
     snake.cruiseAltitude = 1.7f;
     bodies.push_back(std::move(snake));
 
+    // El ultimo y mas lejano: una cabeza de demonio (juego Infierno, estilo Doom).
+    CelestialBody demon;
+    demon.name = "Doom";
+    demon.buildLods(Material{"Doom", Vec3{0.75f, 0.12f, 0.1f}});
+    demon.shader = voxelShader;
+    demon.radius = 18.0f;
+    demon.orbitRadius = 830.0f;
+    demon.orbitPeriod = keplerPeriod(demon.orbitRadius);
+    demon.orbitPhase = 3.1f;
+    demon.spinPeriod = 55.0f;
+    demon.surfaceGravity = 8.0f;
+    demon.orbitColor = {1.0f, 0.35f, 0.25f};
+    demon.cruiseAltitude = 1.7f;
+    bodies.push_back(std::move(demon));
+
     // Cielo de fantasia en tonos morados: fondo violeta, Via Lactea lila y
     // nebulosas violeta, magenta y lavanda, mas intensas que las del universo normal.
     SkyPalette palette;
@@ -403,6 +418,94 @@ void Scene::buildAlternate() {
             }));
     });
     builders.emplace_back([&]() {
+        // Doom: cabeza de demonio roja (la cara hacia +Z) con dos cuernos curvos de
+        // hueso, orejas puntiagudas, ojos amarillos que brillan bajo unas cejas
+        // oscuras y una boca abierta con colmillos y el fondo de lava.
+        auto capsule = [](const Vec3& p, const Vec3& a, const Vec3& b, float ra, float rb) {
+            Vec3 ab = b - a;
+            float t = clampf(dot(p - a, ab) / dot(ab, ab), 0.0f, 1.0f);
+            return length(p - (a + ab * t)) - (ra + (rb - ra) * t);
+        };
+        auto head = [](const Vec3& p) {
+            Vec3 q{p.x, p.y / 0.92f, p.z / 0.95f};
+            return dot(q, q) < 1.0f;
+        };
+        auto mouth = [](const Vec3& p) {
+            float x = p.x / 0.6f;
+            return p.z > 0.4f && std::fabs(p.x) < 0.6f && p.y < -0.2f && p.y > -0.58f + 0.28f * x * x;
+        };
+        // Cuernos: tubos que salen de arriba de la cabeza, se abren y se curvan hacia adentro.
+        const int hornSamples = 30;
+        std::vector<Vec3> horn[2];
+        for (int side = 0; side < 2; ++side) {
+            float s = side ? 1.0f : -1.0f;
+            for (int i = 0; i < hornSamples; ++i) {
+                float t = (float)i / (hornSamples - 1);
+                horn[side].push_back(Vec3{s * (0.5f + 0.75f * t - 0.5f * t * t), 0.55f + 0.95f * t, -0.1f - 0.2f * t});
+            }
+        }
+        auto hornAt = [&](const Vec3& p, float& along) {
+            for (int side = 0; side < 2; ++side)
+                for (int i = 0; i < hornSamples; ++i) {
+                    float t = (float)i / (hornSamples - 1);
+                    if (length(p - horn[side][i]) < 0.24f * (1.0f - t) + 0.035f) {
+                        along = t;
+                        return true;
+                    }
+                }
+            return false;
+        };
+        auto ear = [&](const Vec3& p) {
+            return capsule(p, Vec3{0.85f, 0.1f, -0.05f}, Vec3{1.35f, 0.4f, -0.25f}, 0.16f, 0.02f) < 0.0f ||
+                   capsule(p, Vec3{-0.85f, 0.1f, -0.05f}, Vec3{-1.35f, 0.4f, -0.25f}, 0.16f, 0.02f) < 0.0f;
+        };
+        // Colmillos: conos que bajan del labio de arriba.
+        auto fang = [&](const Vec3& p) {
+            const float xs[4] = {-0.36f, -0.14f, 0.14f, 0.36f};
+            for (float x : xs) {
+                float z = 0.95f * std::sqrt(std::max(0.0f, 1.0f - x * x - 0.05f)) - 0.1f;
+                if (capsule(p, Vec3{x, -0.18f, z}, Vec3{x, std::fabs(x) > 0.3f ? -0.4f : -0.34f, z}, 0.07f, 0.01f) < 0.0f)
+                    return true;
+            }
+            return false;
+        };
+        const Vec3 eyeL = normalize(Vec3{-0.33f, 0.22f, 0.9f}), eyeR = normalize(Vec3{0.33f, 0.22f, 0.9f});
+        bodies[ALT_DEMON].lods.clear();
+        bodies[ALT_DEMON].lods.push_back(makeVoxelSolid(48, 1.75f,
+            [&](const Vec3& p) {
+                float along;
+                return (head(p) && !mouth(p)) || hornAt(p, along) || ear(p) || fang(p);
+            },
+            [&](const Vec3& p) {
+                float along;
+                if (fang(p)) return VoxelCell{Vec3{0.96f, 0.93f, 0.85f}, 0, 0.1f};
+                if (!head(p) && hornAt(p, along)) {
+                    // Hueso claro que se oscurece hacia la punta, con anillos.
+                    Vec3 c = lerp(Vec3{0.9f, 0.84f, 0.68f}, Vec3{0.25f, 0.18f, 0.18f}, along * along);
+                    if ((int)(along * 9.0f) % 2) c = c * 0.85f;
+                    return VoxelCell{c, 0, 0.0f};
+                }
+                if (ear(p) && !head(p)) return VoxelCell{Vec3{0.6f, 0.08f, 0.08f}, 0, 0.0f};
+                // Adentro de la boca: brillo de lava.
+                if (p.z > 0.3f && p.y < -0.15f && std::fabs(p.x) < 0.65f && length(p) < 0.97f)
+                    return VoxelCell{Vec3{1.0f, 0.4f, 0.08f}, 0, 0.8f};
+                Vec3 d = normalize(p);
+                float l = dot(d, eyeL), r = dot(d, eyeR);
+                if (l > 0.982f || r > 0.982f) {
+                    bool pupil = std::fabs(d.x - (l > r ? eyeL.x : eyeR.x)) < 0.03f; // pupila de rendija
+                    return VoxelCell{pupil ? Vec3{0.1f, 0.0f, 0.0f} : Vec3{1.0f, 0.9f, 0.15f}, 0, pupil ? 0.0f : 1.0f};
+                }
+                // Cejas: una franja oscura inclinada encima de cada ojo (enojado).
+                if (d.z > 0.7f && std::fabs(d.x) > 0.12f && std::fabs(d.x) < 0.5f) {
+                    float brow = 0.36f + 0.25f * (0.5f - std::fabs(d.x));
+                    if (std::fabs(d.y - brow) < 0.05f) return VoxelCell{Vec3{0.25f, 0.03f, 0.05f}, 0, 0.0f};
+                }
+                // Piel roja con manchas mas oscuras.
+                float spot = std::sin(p.x * 9.0f) * std::sin(p.y * 7.0f + 1.0f) * std::sin(p.z * 8.0f + 2.0f);
+                return VoxelCell{spot > 0.35f ? Vec3{0.55f, 0.07f, 0.07f} : Vec3{0.78f, 0.13f, 0.1f}, 0, 0.0f};
+            }));
+    });
+    builders.emplace_back([&]() {
         // Estrellas y galaxias de decoracion, lejos de todo el sistema.
         voxelStars = makeVoxelStars(ALT_STAR_SEED, 700, 2600.0f, 4200.0f);
         voxelGalaxies.push_back(makeVoxelGalaxy(GALAXY_SEED, 1400, 750.0f, {1.0f, 0.9f, 1.0f}, {0.55f, 0.3f, 1.0f}));
@@ -417,5 +520,5 @@ void Scene::buildAlternate() {
     size_t tris = 0;
     for (const CelestialBody& b : bodies)
         if (!b.blackHole) tris += b.lods[0].triangles.size();
-    std::printf("Universo alterno listo: Albor, Arena, Entrenamiento, Pac-Man, Galaga, Centipede y Snake, de cubos (%zu triangulos)\n", tris);
+    std::printf("Universo alterno listo: Albor, Arena, Entrenamiento, Pac-Man, Galaga, Centipede, Snake y Doom, de cubos (%zu triangulos)\n", tris);
 }
