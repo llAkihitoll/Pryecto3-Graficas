@@ -14,7 +14,7 @@ struct Uniforms {
     float time = 0.0f;  // segundos desde que arranco el programa
     bool cullBackFaces = true;
     const PlanetTextures* textures = nullptr; // solo para sol y planetas
-    // Giro extra para una capa de textura animada (las nubes de Vergel): se
+    // Giro extra para una capa de textura animada (las nubes de Tierra): se
     // calcula una vez por cuadro para no hacer senos y cosenos por pixel.
     Mat4 textureMotion = Mat4::identity();
     Vec3 objectCenter; // centro del planeta sobre el que estan los objetos de superficie

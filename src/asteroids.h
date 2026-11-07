@@ -6,7 +6,7 @@
 #include "renderer.h"
 #include "ship.h"
 
-// Cinturon de asteroides entre las orbitas de Glacia y Vergel. Cada roca
+// Cinturon de asteroides entre las orbitas de Marte y Jupiter. Cada roca
 // orbita al sol (tambien con la ley de Kepler) y gira sobre si misma. El carro
 // las puede chocar: la roca sale disparada, vuela libre (la gravedad de los
 // cuerpos la curva) y si llega a un planeta o al sol explota. Despues de unos

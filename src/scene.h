@@ -17,7 +17,7 @@ struct CelestialBody {
     std::vector<Mesh> sphereLods; // si esta deformado: las mismas esferas sin deformar (tecla G)
     mutable int currentLod = 0; // el que se uso en el ultimo cuadro (-1 = descartado)
     // Forma del planeta: distancia al centro (en radios) segun la direccion.
-    // Vacia = esfera perfecta. Duna la usa para hundir los crateres.
+    // Vacia = esfera perfecta. Venus la usa para hundir los crateres.
     std::function<float(const Vec3&)> shape;
     FragmentShader shader;
     PlanetTextures textures; // superficie horneada al arrancar
@@ -42,7 +42,7 @@ struct CelestialBody {
     int propCount = 0;
     float propHeight = 0.0f; // lo mas alto que sobresalen, para el descarte
 
-    // Anillos (solo Aurelia): malla plana en radios del planeta.
+    // Anillos (Saturno y Urano): malla plana en radios del planeta.
     Mesh ring;
     float ringOuter = 0.0f; // radio exterior de los anillos, en radios del planeta
 
@@ -70,9 +70,21 @@ struct Star {
 
 // Tercera ley de Kepler: el periodo de una orbita crece con el radio a la
 // 1.5, asi que mientras mas cerca del sol, mas rapido se da la vuelta.
-// KEPLER_K fija la escala (con 0.045, Duna da una vuelta en ~75 s).
+// KEPLER_K fija la escala (con 0.045, Venus da una vuelta en ~75 s).
 const float KEPLER_K = 0.045f;
 inline float keplerPeriod(float orbitRadius) { return KEPLER_K * std::pow(orbitRadius, 1.5f); }
+
+// Indices de los planetas del sistema solar, en su orden real desde el sol
+// (el 0 es el sol). El agujero negro va despues de Neptuno.
+const int HOME_MERCURY = 1;
+const int HOME_VENUS = 2;
+const int HOME_EARTH = 3;
+const int HOME_MARS = 4;
+const int HOME_JUPITER = 5;
+const int HOME_SATURN = 6;
+const int HOME_URANUS = 7;
+const int HOME_NEPTUNE = 8;
+const int HOME_PLANETS = 9; // sol + 8 planetas
 
 // Indices de los planetas con minijuego en el universo alterno.
 const int ALT_ARENA = 1;   // futbol estilo Rocket League
@@ -92,7 +104,7 @@ struct Scene {
     std::vector<Mesh> rockModels;
     Mesh treeModel, crystalModel, beaconModel;
     unsigned propSeed = 0;
-    bool deformTerrain = true; // tecla G: ver Duna deformada o como esfera
+    bool deformTerrain = true; // tecla G: ver Venus deformada o como esfera
 
     // Donde aparece el carro al empezar (o al reaparecer) y a que cuerpo mira,
     // y donde sale cuando llega a este universo por el agujero negro.

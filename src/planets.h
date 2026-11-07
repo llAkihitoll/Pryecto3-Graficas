@@ -8,24 +8,33 @@
 struct PlanetTextures {
     CubeMap<Vec3> color;   // color de la superficie (en el sol: granulacion, fase, manchas)
     CubeMap<Vec3> normal;  // normal con relieve, en el espacio del modelo (el sol no la usa)
-    CubeMap<float> mask;   // Glacia: brillo de las grietas. Vergel: 1 = agua. Ignis: lava
-    CubeMap<float> clouds; // Vergel: densidad de nubes (0..1)
+    CubeMap<float> mask;   // Urano: brillo de las grietas. Tierra: 1 = agua. Mercurio: lava
+    CubeMap<float> clouds; // Tierra: densidad de nubes (0..1)
 };
 
 // Planeta desertico: tierras bajas rojizas, mesetas claras, crateres y dunas.
 void bakeDune(PlanetTextures& tex, unsigned seed, int size);
 
-// Glacia: placas de hielo separadas por grietas brillantes y escarcha polar.
+// Urano: placas de hielo separadas por grietas brillantes y escarcha polar.
 void bakeGlacia(PlanetTextures& tex, unsigned seed, int size);
 
-// Vergel: continentes verdes, oceanos, montanas nevadas y una capa de nubes.
+// Tierra: continentes verdes, oceanos, montanas nevadas y una capa de nubes.
 void bakeVergel(PlanetTextures& tex, unsigned seed, int size);
 
-// Aurelia: gigante gaseoso con bandas de nubes turbulentas y una tormenta.
-// Solo color: la animacion (bandas que giran a distinta velocidad) la hace el shader.
-void bakeAurelia(PlanetTextures& tex, unsigned seed, int size);
+// Marte: oxido con regiones oscuras de basalto, crateres, casquetes polares
+// y un gran canon cerca del ecuador.
+void bakeMars(PlanetTextures& tex, unsigned seed, int size);
 
-// Ignis: basalto oscuro con rios y lagos de lava (mascara para la luz propia).
+// Gigantes gaseosos: solo color. La animacion (bandas que giran a distinta
+// velocidad) la hace el shader.
+// Jupiter: bandas cafes y crema muy marcadas y la Gran Mancha Roja.
+void bakeJupiter(PlanetTextures& tex, unsigned seed, int size);
+// Saturno: bandas palidas y suaves, sin tormentas grandes.
+void bakeAurelia(PlanetTextures& tex, unsigned seed, int size);
+// Neptuno: azul intenso con bandas tenues y una mancha oscura.
+void bakeNeptune(PlanetTextures& tex, unsigned seed, int size);
+
+// Mercurio: basalto oscuro con rios y lagos de lava (mascara para la luz propia).
 void bakeIgnis(PlanetTextures& tex, unsigned seed, int size);
 
 // Consultas del terreno para decidir donde colocar objetos encima. Se les

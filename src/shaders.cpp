@@ -129,7 +129,8 @@ Vec3 glaciaShader(const Fragment& f, const Uniforms& u) {
     return albedo * (0.05f + 0.9f * diffuse) + Vec3{1, 1, 1} * spec + fresnel + glow;
 }
 
-Vec3 aureliaShader(const Fragment& f, const Uniforms& u) {
+// Comun a los gigantes gaseosos; solo cambia el color de la bruma del borde.
+static Vec3 gasGiantShade(const Fragment& f, const Uniforms& u, const Vec3& hazeColor) {
     Vec3 dir = normalize(f.localPos);
     // Rotacion diferencial: la velocidad de giro cambia con la latitud.
     float speed = 0.05f + 0.04f * std::sin(dir.y * 9.0f); // radianes por segundo
@@ -147,9 +148,13 @@ Vec3 aureliaShader(const Fragment& f, const Uniforms& u) {
     float facing = std::max(0.0f, dot(geo, toCamera));
     albedo = albedo * (0.6f + 0.4f * std::sqrt(facing));
     float edge = 1.0f - facing;
-    Vec3 haze = Vec3{1.0f, 0.8f, 0.55f} * (edge * edge * edge * (0.1f + 0.9f * day) * 0.5f);
+    Vec3 haze = hazeColor * (edge * edge * edge * (0.1f + 0.9f * day) * 0.5f);
     return albedo * (0.04f + diffuse) + haze;
 }
+
+Vec3 aureliaShader(const Fragment& f, const Uniforms& u) { return gasGiantShade(f, u, Vec3{1.0f, 0.8f, 0.55f}); }
+
+Vec3 neptuneShader(const Fragment& f, const Uniforms& u) { return gasGiantShade(f, u, Vec3{0.4f, 0.65f, 1.0f}); }
 
 Vec3 ringShader(const Fragment& f, const Uniforms& u) {
     const Material& m = *f.material;
