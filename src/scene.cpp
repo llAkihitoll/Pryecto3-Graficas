@@ -14,8 +14,11 @@ const unsigned SUN_SEED = 7;
 const unsigned DUNE_SEED = 42;
 const unsigned GLACIA_SEED = 1337;
 const unsigned VERGEL_SEED = 99;
-const unsigned AURELIA_SEED = 314;
+const unsigned AURELIA_SEED = 271;
 const unsigned IGNIS_SEED = 666;
+const unsigned MARS_SEED = 1877;
+const unsigned JUPITER_SEED = 314; // la que usaba antes Saturno: la misma tormenta
+const unsigned NEPTUNE_SEED = 1846;
 const int STAR_COUNT = 5000;
 const unsigned SKY_SEED = 31;
 
@@ -79,11 +82,11 @@ static const Noise& duneTerrain() {
     return noise;
 }
 
-// Que tanto se hunden o levantan los vertices de Duna, en radios del planeta
+// Que tanto se hunden o levantan los vertices de Venus, en radios del planeta
 // (0.09 * radio 10 = hasta ~0.9 unidades).
 const float DUNE_RELIEF = 0.09f;
 
-// Forma deformada de Duna: la misma altura que se uso para la textura y el
+// Forma deformada de Venus: la misma altura que se uso para la textura y el
 // mapa de normales, ahora tambien moviendo la geometria.
 static float duneShape(const Vec3& dir) {
     return 1.0f + DUNE_RELIEF * clampf(duneHeight(duneTerrain(), dir), -1.0f, 1.0f);
@@ -99,7 +102,7 @@ void Scene::buildProps(unsigned seed) {
     std::vector<const Mesh*> rocks;
     for (const Mesh& r : rockModels) rocks.push_back(&r);
 
-    // Duna: balizas en las tierras altas y rocas fuera de los campos de dunas
+    // Venus: balizas en las tierras altas y rocas fuera de los campos de dunas
     // y del fondo de los crateres grandes.
     std::vector<PropInstance> dune;
     scatterProps(ScatterRule{{&beaconModel}, 300, 0.55f, 0.5f, 0.6f, 0.8f,
@@ -112,13 +115,13 @@ void Scene::buildProps(unsigned seed) {
                              }},
                  seed + 2, density, dune);
 
-    // Glacia: grupos de cristales que brotan sobre las grietas.
+    // Urano: grupos de cristales que brotan sobre las grietas.
     std::vector<PropInstance> glacia;
     scatterProps(ScatterRule{{&crystalModel}, 1500, 0.4f, 0.1f, 0.35f, 0.8f,
                              [&](const Vec3& p) { return glaciaCrack(glaciaTerrain, p); }},
                  seed + 3, density, glacia);
 
-    // Vergel: arboles en tierra firme (no en el mar ni en las montanas) y
+    // Tierra: arboles en tierra firme (no en el mar ni en las montanas) y
     // rocas en las montanas.
     std::vector<PropInstance> vergel;
     scatterProps(ScatterRule{{&treeModel}, 1500, 0.42f, 0.055f, 0.4f, 0.75f,
@@ -132,18 +135,28 @@ void Scene::buildProps(unsigned seed) {
                              [&](const Vec3& p) { return smoothstep(0.22f, 0.3f, vergelElevation(vergelTerrain, p)); }},
                  seed + 5, density, vergel);
 
-    // Ignis: rocas sobre el basalto, nunca sobre la lava.
+    // Mercurio: rocas sobre el basalto, nunca sobre la lava.
     std::vector<PropInstance> ignis;
     Noise ignisTerrain(IGNIS_SEED);
     scatterProps(ScatterRule{rocks, 250, 0.5f, 0.16f, 0.35f, 0.8f,
                              [&](const Vec3& p) { return ignisLava(ignisTerrain, p) > 0.05f ? 0.0f : 1.0f; }},
                  seed + 6, density, ignis);
 
-    const std::vector<PropInstance>* lists[] = {nullptr, &dune, &glacia, &vergel, nullptr, &ignis};
-    const float heights[] = {0.0f, 3.6f, 2.0f, 2.7f, 0.0f, 1.0f}; // altura maxima de cada planeta (modelo * escala)
+    // Marte: rocas y algunas balizas, fuera de los casquetes polares.
+    std::vector<PropInstance> mars;
+    auto outsideCaps = [](const Vec3& p) { return 1.0f - smoothstep(0.72f, 0.8f, std::fabs(p.y)); };
+    scatterProps(ScatterRule{rocks, 200, 0.5f, 0.12f, 0.3f, 0.9f, outsideCaps}, seed + 7, density, mars);
+    scatterProps(ScatterRule{{&beaconModel}, 120, 0.6f, 0.6f, 0.6f, 0.8f, outsideCaps}, seed + 8, density, mars);
+
+    // En el orden de bodies (HOME_MERCURY...). Los gigantes de gas no tienen
+    // objetos encima.
+    const std::vector<PropInstance>* lists[HOME_PLANETS] = {nullptr, &ignis, &dune, &vergel, &mars,
+                                                            nullptr, nullptr, &glacia, nullptr};
+    // Altura maxima de los objetos de cada planeta (modelo * escala).
+    const float heights[HOME_PLANETS] = {0.0f, 1.0f, 3.6f, 2.7f, 3.6f, 0.0f, 0.0f, 2.0f, 0.0f};
     std::printf("Objetos de superficie (semilla %u):", seed);
-    for (int i = 1; i < 6 && i < (int)bodies.size(); ++i) {
-        if (!lists[i]) continue; // Aurelia es de gas: no tiene objetos encima
+    for (int i = 1; i < HOME_PLANETS && i < (int)bodies.size(); ++i) {
+        if (!lists[i]) continue;
         // Los objetos se apoyan en la altura real del terreno si esta deformado.
         bodies[i].props = mergeProps(*lists[i], bodies[i].radius, deformTerrain ? bodies[i].shape : nullptr);
         bodies[i].propCount = (int)lists[i]->size();
@@ -164,76 +177,12 @@ void Scene::build(unsigned seed) {
     sun.surfaceGravity = 4.0f; // suave: si no, el carro quieto se iria cayendo al sol
     bodies.push_back(std::move(sun));
 
-    CelestialBody dune;
-    dune.name = "Duna";
-    dune.shape = duneShape;
-    dune.buildLods(Material{"Duna", Vec3{0.85f, 0.55f, 0.32f}});
-    dune.shader = duneShader;
-    dune.radius = 10.0f;
-    dune.orbitRadius = 140.0f;
-    dune.orbitPeriod = keplerPeriod(dune.orbitRadius);
-    dune.spinPeriod = 40.0f;
-    dune.axialTilt = radians(15.0f);
-    dune.surfaceGravity = 10.0f;
-    dune.orbitColor = {0.95f, 0.6f, 0.3f};
-    bodies.push_back(std::move(dune));
-
-    // Las fases iniciales estan elegidas para que, desde donde arranca el
-    // carro, Glacia y Vergel se vean a los lados de Duna.
-    CelestialBody glacia;
-    glacia.name = "Glacia";
-    glacia.buildLods(Material{"Glacia", Vec3{0.8f, 0.9f, 1.0f}});
-    glacia.shader = glaciaShader;
-    glacia.radius = 8.0f;
-    glacia.orbitRadius = 230.0f;
-    glacia.orbitPeriod = keplerPeriod(glacia.orbitRadius);
-    glacia.orbitPhase = 0.83f;
-    glacia.spinPeriod = 50.0f;
-    glacia.axialTilt = radians(-25.0f);
-    glacia.surfaceGravity = 7.0f;
-    glacia.orbitColor = {0.55f, 0.85f, 1.0f};
-    bodies.push_back(std::move(glacia));
-
-    CelestialBody vergel;
-    vergel.name = "Vergel";
-    vergel.buildLods(Material{"Vergel", Vec3{0.3f, 0.6f, 0.3f}});
-    vergel.shader = vergelShader;
-    vergel.radius = 13.0f;
-    vergel.orbitRadius = 330.0f;
-    vergel.orbitPeriod = keplerPeriod(vergel.orbitRadius);
-    vergel.orbitPhase = 0.2f;
-    vergel.spinPeriod = 70.0f;
-    vergel.axialTilt = radians(10.0f);
-    vergel.surfaceGravity = 12.0f;
-    vergel.orbitColor = {0.4f, 0.9f, 0.45f};
-    vergel.cloudPeriod = 150.0f;
-    bodies.push_back(std::move(vergel));
-
-    CelestialBody aurelia;
-    aurelia.name = "Aurelia";
-    aurelia.buildLods(Material{"Aurelia", Vec3{0.9f, 0.75f, 0.55f}});
-    aurelia.shader = aureliaShader;
-    aurelia.radius = 18.0f;
-    aurelia.orbitRadius = 450.0f;
-    aurelia.orbitPeriod = keplerPeriod(aurelia.orbitRadius);
-    aurelia.orbitPhase = 0.55f;
-    aurelia.spinPeriod = 90.0f;
-    aurelia.axialTilt = radians(20.0f);
-    aurelia.surfaceGravity = 14.0f;
-    aurelia.orbitColor = {0.95f, 0.8f, 0.55f};
-    // Tres anillos con huecos entre ellos (los huecos son geometria real).
-    aurelia.ring.materials = {Material{"Anillo interior", {0.70f, 0.62f, 0.50f}},
-                              Material{"Anillo medio", {0.90f, 0.82f, 0.68f}},
-                              Material{"Anillo exterior", {0.60f, 0.52f, 0.42f}}};
-    addRing(aurelia.ring, 1.35f, 1.65f, 128, 0);
-    addRing(aurelia.ring, 1.72f, 2.15f, 128, 1);
-    addRing(aurelia.ring, 2.22f, 2.45f, 128, 2);
-    aurelia.ringOuter = 2.45f;
-    bodies.push_back(std::move(aurelia));
-
+    // Los planetas van en su orden real desde el sol (HOME_MERCURY...). Las
+    // fases iniciales estan elegidas para que, desde donde arranca el carro,
+    // la Tierra y Marte se vean a los lados de Venus.
     CelestialBody ignis;
-    ignis.name = "Ignis";
-    ignis.buildLods(Material{"Ignis", Vec3{0.3f, 0.2f, 0.15f}});
+    ignis.name = "Mercurio";
+    ignis.buildLods(Material{"Mercurio", Vec3{0.3f, 0.2f, 0.15f}});
     ignis.shader = ignisShader;
     ignis.radius = 9.0f;
     ignis.orbitRadius = 85.0f;
@@ -245,10 +194,124 @@ void Scene::build(unsigned seed) {
     ignis.orbitColor = {1.0f, 0.35f, 0.1f};
     bodies.push_back(std::move(ignis));
 
+    CelestialBody dune;
+    dune.name = "Venus";
+    dune.shape = duneShape;
+    dune.buildLods(Material{"Venus", Vec3{0.85f, 0.55f, 0.32f}});
+    dune.shader = duneShader;
+    dune.radius = 10.0f;
+    dune.orbitRadius = 140.0f;
+    dune.orbitPeriod = keplerPeriod(dune.orbitRadius);
+    dune.spinPeriod = 40.0f;
+    dune.axialTilt = radians(15.0f);
+    dune.surfaceGravity = 10.0f;
+    dune.orbitColor = {0.95f, 0.6f, 0.3f};
+    bodies.push_back(std::move(dune));
+
+    CelestialBody vergel;
+    vergel.name = "Tierra";
+    vergel.buildLods(Material{"Tierra", Vec3{0.3f, 0.6f, 0.3f}});
+    vergel.shader = vergelShader;
+    vergel.radius = 13.0f;
+    vergel.orbitRadius = 230.0f;
+    vergel.orbitPeriod = keplerPeriod(vergel.orbitRadius);
+    vergel.orbitPhase = 0.83f;
+    vergel.spinPeriod = 70.0f;
+    vergel.axialTilt = radians(23.4f);
+    vergel.surfaceGravity = 12.0f;
+    vergel.orbitColor = {0.4f, 0.9f, 0.45f};
+    vergel.cloudPeriod = 150.0f;
+    bodies.push_back(std::move(vergel));
+
+    CelestialBody mars;
+    mars.name = "Marte";
+    mars.buildLods(Material{"Marte", Vec3{0.7f, 0.3f, 0.15f}});
+    mars.shader = duneShader; // roca con relieve y bruma de polvo anaranjada, igual que Venus
+    mars.radius = 8.0f;
+    mars.orbitRadius = 330.0f;
+    mars.orbitPeriod = keplerPeriod(mars.orbitRadius);
+    mars.orbitPhase = 0.2f;
+    mars.spinPeriod = 72.0f;
+    mars.axialTilt = radians(25.0f);
+    mars.surfaceGravity = 8.0f;
+    mars.orbitColor = {1.0f, 0.4f, 0.25f};
+    bodies.push_back(std::move(mars));
+
+    // Entre Marte y Jupiter va el cinturon de asteroides (asteroids.cpp).
+    CelestialBody jupiter;
+    jupiter.name = "Jupiter"; // sin tilde: la fuente del HUD es solo ASCII
+    jupiter.buildLods(Material{"Jupiter", Vec3{0.85f, 0.65f, 0.45f}});
+    jupiter.shader = aureliaShader;
+    jupiter.radius = 24.0f;
+    jupiter.orbitRadius = 500.0f;
+    jupiter.orbitPeriod = keplerPeriod(jupiter.orbitRadius);
+    jupiter.orbitPhase = 0.55f;
+    jupiter.spinPeriod = 80.0f;
+    jupiter.axialTilt = radians(3.0f);
+    jupiter.surfaceGravity = 16.0f;
+    jupiter.orbitColor = {0.9f, 0.7f, 0.5f};
+    bodies.push_back(std::move(jupiter));
+
+    CelestialBody aurelia;
+    aurelia.name = "Saturno";
+    aurelia.buildLods(Material{"Saturno", Vec3{0.9f, 0.8f, 0.6f}});
+    aurelia.shader = aureliaShader;
+    aurelia.radius = 18.0f;
+    aurelia.orbitRadius = 640.0f;
+    aurelia.orbitPeriod = keplerPeriod(aurelia.orbitRadius);
+    aurelia.orbitPhase = 3.6f;
+    aurelia.spinPeriod = 90.0f;
+    aurelia.axialTilt = radians(27.0f);
+    aurelia.surfaceGravity = 14.0f;
+    aurelia.orbitColor = {0.95f, 0.85f, 0.6f};
+    // Tres anillos con huecos entre ellos (los huecos son geometria real).
+    aurelia.ring.materials = {Material{"Anillo interior", {0.70f, 0.62f, 0.50f}},
+                              Material{"Anillo medio", {0.90f, 0.82f, 0.68f}},
+                              Material{"Anillo exterior", {0.60f, 0.52f, 0.42f}}};
+    addRing(aurelia.ring, 1.35f, 1.65f, 128, 0);
+    addRing(aurelia.ring, 1.72f, 2.15f, 128, 1);
+    addRing(aurelia.ring, 2.22f, 2.45f, 128, 2);
+    aurelia.ringOuter = 2.45f;
+    bodies.push_back(std::move(aurelia));
+
+    // Urano gira "acostado": su eje esta casi en el plano de la orbita, y su
+    // anillo delgado queda casi vertical.
+    CelestialBody glacia;
+    glacia.name = "Urano";
+    glacia.buildLods(Material{"Urano", Vec3{0.8f, 0.9f, 1.0f}});
+    glacia.shader = glaciaShader;
+    glacia.radius = 14.0f;
+    glacia.orbitRadius = 760.0f;
+    glacia.orbitPeriod = keplerPeriod(glacia.orbitRadius);
+    glacia.orbitPhase = 5.2f;
+    glacia.spinPeriod = 50.0f;
+    glacia.axialTilt = radians(98.0f);
+    glacia.surfaceGravity = 10.0f;
+    glacia.orbitColor = {0.55f, 0.85f, 1.0f};
+    glacia.ring.materials = {Material{"Anillo de Urano", {0.45f, 0.50f, 0.55f}}};
+    addRing(glacia.ring, 1.62f, 1.72f, 128, 0);
+    glacia.ringOuter = 1.72f;
+    bodies.push_back(std::move(glacia));
+
+    CelestialBody neptune;
+    neptune.name = "Neptuno";
+    neptune.buildLods(Material{"Neptuno", Vec3{0.2f, 0.35f, 0.85f}});
+    neptune.shader = neptuneShader;
+    neptune.radius = 14.0f;
+    neptune.orbitRadius = 880.0f;
+    neptune.orbitPeriod = keplerPeriod(neptune.orbitRadius);
+    neptune.orbitPhase = 1.3f;
+    neptune.spinPeriod = 60.0f;
+    neptune.axialTilt = radians(28.0f);
+    neptune.surfaceGravity = 12.0f;
+    neptune.orbitColor = {0.3f, 0.5f, 1.0f};
+    bodies.push_back(std::move(neptune));
+
     // Agujero negro muy por encima del plano de las orbitas: cruzar su
     // horizonte lleva al universo alterno.
     bodies.push_back(makeBlackHole("Agujero negro", Vec3{0.0f, 650.0f, 0.0f}, 14.0f, Vec3{1.0f, 0.5f, 0.15f}));
     blackHoleIndex = (int)bodies.size() - 1;
+    spawnLook = HOME_VENUS;
 
     // Hornear las superficies de todos los cuerpos al mismo tiempo (cada
     // horneado ademas reparte sus 6 caras en hilos). Los cuerpos ya estan
@@ -256,11 +319,14 @@ void Scene::build(unsigned seed) {
     std::vector<std::thread> bakers;
     bakers.emplace_back([this]() { bakeSun(bodies[0].textures, SUN_SEED, 256); });
     bakers.emplace_back([this]() { skybox.bake(SKY_SEED, 512); });
-    bakers.emplace_back([this]() { bakeDune(bodies[1].textures, DUNE_SEED, 512); });
-    bakers.emplace_back([this]() { bakeGlacia(bodies[2].textures, GLACIA_SEED, 512); });
-    bakers.emplace_back([this]() { bakeVergel(bodies[3].textures, VERGEL_SEED, 512); });
-    bakers.emplace_back([this]() { bakeAurelia(bodies[4].textures, AURELIA_SEED, 512); });
-    bakers.emplace_back([this]() { bakeIgnis(bodies[5].textures, IGNIS_SEED, 512); });
+    bakers.emplace_back([this]() { bakeIgnis(bodies[HOME_MERCURY].textures, IGNIS_SEED, 512); });
+    bakers.emplace_back([this]() { bakeDune(bodies[HOME_VENUS].textures, DUNE_SEED, 512); });
+    bakers.emplace_back([this]() { bakeVergel(bodies[HOME_EARTH].textures, VERGEL_SEED, 512); });
+    bakers.emplace_back([this]() { bakeMars(bodies[HOME_MARS].textures, MARS_SEED, 512); });
+    bakers.emplace_back([this]() { bakeJupiter(bodies[HOME_JUPITER].textures, JUPITER_SEED, 512); });
+    bakers.emplace_back([this]() { bakeAurelia(bodies[HOME_SATURN].textures, AURELIA_SEED, 512); });
+    bakers.emplace_back([this]() { bakeGlacia(bodies[HOME_URANUS].textures, GLACIA_SEED, 512); });
+    bakers.emplace_back([this]() { bakeNeptune(bodies[HOME_NEPTUNE].textures, NEPTUNE_SEED, 512); });
     for (std::thread& t : bakers) t.join();
 
     for (unsigned i = 0; i < 3; ++i) rockModels.push_back(makeRock(100 + i)); // 3 variantes de roca

@@ -4,8 +4,8 @@
 #include "scene.h"
 #include "shaders.h"
 
-// Medidas del cinturon (entre la orbita de Glacia, 230, y la de Vergel, 330).
-const float BELT_INNER = 262.0f, BELT_OUTER = 302.0f;
+// Medidas del cinturon (entre la orbita de Marte, 330, y la de Jupiter, 500).
+const float BELT_INNER = 385.0f, BELT_OUTER = 425.0f;
 const float BELT_THICKNESS = 5.0f;   // cuanto se separan del plano de las orbitas
 const float RESPAWN_TIME = 8.0f;     // segundos hasta que una roca reaparece
 const float MAX_FLIGHT_TIME = 40.0f; // una roca que no choca con nada se pierde

@@ -48,7 +48,7 @@ const float WARP_TIME = 2.4f;
 const float LAND_TIME = 1.6f;
 
 // Cinturon de asteroides: cuantas rocas y con que semilla se reparten.
-const int ASTEROID_COUNT = 220;
+const int ASTEROID_COUNT = 300;
 const unsigned ASTEROID_SEED = 4242;
 
 // Por debajo de este radio en pantalla (pixeles) el carro usa el modelo reducido.
@@ -283,13 +283,13 @@ int main(int argc, char* argv[]) {
     //   --look yaw pitch          vista libre de la camara (grados)
     //   --zoom D                  distancia de la camara al carro
     //   --no-opt                  sin descarte de objetos ni LOD (para comparar)
-    //   --near N                  empieza frente al lado de dia del cuerpo N (1 = Duna, 2 = Glacia...)
+    //   --near N                  empieza frente al lado de dia del cuerpo N (1 = Mercurio, 2 = Venus... 8 = Neptuno)
     //   --near-dist D             con --near: a D unidades del centro, apuntando a donde
     //                             estara el planeta (para probar choques en picada)
     //   --seed N                  semilla para repartir los objetos de superficie
-    //   --flat                    Duna sin deformar (esfera), para comparar
+    //   --flat                    Venus sin deformar (esfera), para comparar
     //   --hide-help               empieza sin el panel de controles
-    //   --test-impact             lanza un asteroide hacia Duna (para probar la explosion)
+    //   --test-impact             lanza un asteroide hacia Venus (para probar la explosion)
     //   --test-hit                pone un asteroide quieto delante del carro (para chocarlo)
     //   --no-normal-map           sin mapas de normales en el carro, para comparar
     //   --dt-test                 prueba de consistencia con distintos FPS
@@ -346,7 +346,7 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--infierno") == 0) { startAlt = true; startArcade = ALT_DEMON; }
     }
 
-    // Construir la escena incluye hornear las superficies del sol y Duna.
+    // Construir la escena incluye hornear las superficies del sol y Venus.
     auto buildStart = std::chrono::steady_clock::now();
     Scene homeScene;
     homeScene.build(propSeed);
@@ -495,11 +495,11 @@ int main(int argc, char* argv[]) {
     }
     if (startAtHole) ship = makeHoleViewShip(*scene, elapsed);
     if (testImpact) {
-        // Se apunta a donde estara Duna cuando llegue la roca (el planeta se mueve).
+        // Se apunta a donde estara Venus cuando llegue la roca (el planeta se mueve).
         Vec3 from = ship.position + Vec3{2.0f, 3.0f, 0.0f};
         float speed = 40.0f;
-        float travel = length(scene->bodies[1].position(elapsed) - from) / speed;
-        Vec3 aim = scene->bodies[1].position(elapsed + travel);
+        float travel = length(scene->bodies[HOME_VENUS].position(elapsed) - from) / speed;
+        Vec3 aim = scene->bodies[HOME_VENUS].position(elapsed + travel);
         belt.launchForTest(from, normalize(aim - from) * speed);
     }
     if (testHit) belt.launchForTest(ship.position + ship.forward * 8.0f, Vec3{0, 0, 0});
@@ -678,7 +678,7 @@ int main(int argc, char* argv[]) {
     // recorrido el carro alrededor del planeta (360 = una vuelta completa).
     if (screenshotPath) {
         float degreesAround = 0.0f;
-        const CelestialBody& around = scene->bodies[nearBody > 0 ? nearBody : 1];
+        const CelestialBody& around = scene->bodies[nearBody > 0 ? nearBody : scene->spawnLook];
         Vec3 prevDir = normalize(ship.position - around.position(elapsed));
         for (const auto& seg : parseFlightScript(flightScript)) {
             ShipInput in = inputFromString(seg.first);
@@ -805,7 +805,7 @@ int main(int argc, char* argv[]) {
                         showHelp = !showHelp;
                         helpTouched = true;
                         break;
-                    case SDLK_g: // deformacion de Duna: los objetos se vuelven a apoyar en el suelo
+                    case SDLK_g: // deformacion de Venus: los objetos se vuelven a apoyar en el suelo
                         scene->deformTerrain = !scene->deformTerrain;
                         scene->buildProps(scene->propSeed);
                         break;
@@ -1029,11 +1029,12 @@ int main(int argc, char* argv[]) {
         if (screenshotPath && ++screenshotFrame >= 3) {
             fb.savePNG(screenshotPath);
             std::printf("%s: render %.1f ms | objetos %d dibujados, %d descartados | objetos de superficie %d | "
-                        "triangulos enviados %d, rasterizados %d | LOD (-1 = descartado) Sol %d, Duna %d, "
-                        "Glacia %d, Vergel %d, carro %s\n",
+                        "triangulos enviados %d, rasterizados %d | LOD (-1 = descartado) Sol %d, Venus %d, "
+                        "Tierra %d, Marte %d, carro %s\n",
                         screenshotPath, frameMs, stats.objectsDrawn, stats.objectsCulled, stats.propsDrawn,
                         stats.trianglesIn, stats.trianglesDrawn, scene->bodies[0].currentLod,
-                        scene->bodies[1].currentLod, scene->bodies[2].currentLod, scene->bodies[3].currentLod,
+                        scene->bodies[HOME_VENUS].currentLod, scene->bodies[HOME_EARTH].currentLod,
+                        scene->bodies[HOME_MARS].currentLod,
                         carUsesLod ? "reducido" : "completo");
             running = false;
         }

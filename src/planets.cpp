@@ -25,7 +25,7 @@ static void bakeReliefNormals(CubeMap<Vec3>& normals, int size, float bump, Heig
     });
 }
 
-// ---------------------------------------------------------------- Duna
+// ---------------------------------------------------------------- Venus
 
 // Perfil de un crater segun la distancia d al centro de su celda: hundido
 // adentro del radio y con un borde levantado justo afuera.
@@ -37,7 +37,7 @@ static float crater(float d, float radius) {
     return 0.35f * std::exp(-std::pow((d - radius) / (radius * 0.25f), 2.0f));
 }
 
-// Todo lo que describe un punto de la superficie de Duna.
+// Todo lo que describe un punto de la superficie de Venus.
 struct DuneSample {
     float height;
     float base;   // relieve grande: negativo = tierras bajas
@@ -82,7 +82,7 @@ void bakeDune(PlanetTextures& tex, unsigned seed, int size) {
     bakeReliefNormals(tex.normal, size, 0.06f, [&](const Vec3& p) { return duneAt(noise, p).height; });
 }
 
-// ---------------------------------------------------------------- Glacia
+// ---------------------------------------------------------------- Urano
 
 // Que tan cerca esta p de una grieta (1 = justo encima). Las grietas son los
 // bordes entre celdas del ruido celular: ahi f1 y f2 son casi iguales.
@@ -120,7 +120,7 @@ void bakeGlacia(PlanetTextures& tex, unsigned seed, int size) {
     bakeReliefNormals(tex.normal, size, 0.05f, [&](const Vec3& p) { return glaciaHeight(noise, p); });
 }
 
-// ---------------------------------------------------------------- Vergel
+// ---------------------------------------------------------------- Tierra
 
 const float VERGEL_SEA_LEVEL = 0.02f;
 static const float SEA_LEVEL = VERGEL_SEA_LEVEL;
@@ -164,35 +164,100 @@ void bakeVergel(PlanetTextures& tex, unsigned seed, int size) {
     });
 }
 
-// ---------------------------------------------------------------- Aurelia
+// ---------------------------------------------------------------- Marte
 
-void bakeAurelia(PlanetTextures& tex, unsigned seed, int size) {
+static float marsCanyon(const Noise& noise, const Vec3& p) {
+    // Una zanja larga y angosta junto al ecuador, solo en un lado del planeta.
+    float line = std::fabs(p.y - 0.08f + 0.05f * noise.fbm(p * 3.0f, 3));
+    return (1.0f - smoothstep(0.012f, 0.04f, line)) * smoothstep(0.15f, 0.55f, p.x);
+}
+
+static float marsHeight(const Noise& noise, const Vec3& p) {
+    float big = crater(noise.cellular(p * 3.2f + Vec3{2.0f, 9.0f, 4.0f}), 0.3f);
+    float small = crater(noise.cellular(p * 9.0f + Vec3{6.0f, 1.0f, 8.0f}), 0.22f);
+    return noise.fbm(p * 2.0f, 5) * 0.5f + big * 0.4f + small * 0.15f - marsCanyon(noise, p) * 0.7f;
+}
+
+void bakeMars(PlanetTextures& tex, unsigned seed, int size) {
     Noise noise(seed);
-    // Paleta de las bandas, de la mas clara a la mas oscura.
-    const Vec3 cream{0.95f, 0.88f, 0.72f}, tan{0.84f, 0.66f, 0.45f};
-    const Vec3 rust{0.70f, 0.40f, 0.24f}, brown{0.45f, 0.28f, 0.18f};
-    const Vec3 stormCenter = normalize(Vec3{0.7f, -0.35f, 0.6f});
+    const Vec3 rust{0.66f, 0.29f, 0.14f}, ochre{0.80f, 0.50f, 0.30f}, basalt{0.30f, 0.16f, 0.10f};
+    const Vec3 ice{0.95f, 0.94f, 0.92f};
 
     tex.color.bake(size, [&](const Vec3& p) {
-        // Turbulencia: se deforma el punto con ruido antes de leer la latitud,
-        // asi los bordes de las bandas se ven ondulados y con remolinos.
-        Vec3 warp{noise.fbm(p * 3.0f, 4), noise.fbm(p * 3.0f + Vec3{7.0f, 2.0f, 5.0f}, 4), 0.0f};
-        float lat = p.y + warp.y * 0.12f + warp.x * 0.04f;
-        float band = 0.5f + 0.5f * std::sin(lat * 15.0f + noise.fbm(p * 1.5f, 3) * 2.0f);
-        float fine = 0.5f + 0.5f * std::sin(lat * 47.0f + warp.x * 3.0f);
-        Vec3 c = band < 0.5f ? lerp(brown, rust, band * 2.0f) : lerp(tan, cream, (band - 0.5f) * 2.0f);
-        c = c * (0.9f + 0.1f * fine);
+        Vec3 c = lerp(rust, ochre, smoothstep(-0.2f, 0.4f, noise.fbm(p * 2.0f, 5)));
+        // Regiones oscuras grandes (como Syrtis Major).
+        c = lerp(c, basalt, smoothstep(0.1f, 0.3f, noise.fbm(p * 1.3f + Vec3{8.0f, 3.0f, 5.0f}, 4)) * 0.8f);
+        c = c * (1.0f - 0.35f * marsCanyon(noise, p)); // el fondo del canon queda en sombra
+        c = c * (1.0f + 0.08f * noise.fbm(p * 35.0f, 2));
+        // Casquetes de hielo en los polos.
+        return lerp(c, ice, smoothstep(0.8f, 0.86f, std::fabs(p.y) + 0.04f * noise.fbm(p * 9.0f, 2)));
+    });
+    bakeReliefNormals(tex.normal, size, 0.06f, [&](const Vec3& p) { return marsHeight(noise, p); });
+}
 
-        // Gran tormenta ovalada: un remolino rojizo en el hemisferio sur.
-        float d = length(p - stormCenter);
-        float storm = 1.0f - smoothstep(0.08f, 0.22f, d + 0.04f * noise.fbm(p * 12.0f, 2));
-        float swirl = 0.5f + 0.5f * std::sin(d * 60.0f - std::atan2(p.z - stormCenter.z, p.x - stormCenter.x) * 2.0f);
-        c = lerp(c, lerp(Vec3{0.75f, 0.30f, 0.18f}, Vec3{0.95f, 0.65f, 0.45f}, swirl), storm);
-        return c;
+// ---------------------------------------------------------------- Gigantes gaseosos
+
+// Paleta de un gigante gaseoso, de la banda mas oscura a la mas clara.
+struct GasPalette {
+    Vec3 darkest, dark, light, lightest;
+};
+
+// Bandas de nubes segun la latitud. Turbulencia: se deforma el punto con
+// ruido antes de leer la latitud, asi los bordes de las bandas se ven
+// ondulados y con remolinos. frequency = cuantas bandas hay; contrast = que
+// tanto se separan las bandas claras de las oscuras.
+static Vec3 gasBands(const Noise& noise, const Vec3& p, const GasPalette& pal, float frequency, float contrast) {
+    Vec3 warp{noise.fbm(p * 3.0f, 4), noise.fbm(p * 3.0f + Vec3{7.0f, 2.0f, 5.0f}, 4), 0.0f};
+    float lat = p.y + warp.y * 0.12f + warp.x * 0.04f;
+    float band = 0.5f + 0.5f * contrast * std::sin(lat * frequency + noise.fbm(p * 1.5f, 3) * 2.0f);
+    float fine = 0.5f + 0.5f * std::sin(lat * frequency * 3.1f + warp.x * 3.0f);
+    Vec3 c = band < 0.5f ? lerp(pal.darkest, pal.dark, band * 2.0f) : lerp(pal.light, pal.lightest, (band - 0.5f) * 2.0f);
+    return c * (0.9f + 0.1f * fine);
+}
+
+// Tormenta ovalada: un remolino de dos colores centrado en center.
+static Vec3 gasStorm(const Noise& noise, const Vec3& p, const Vec3& c, const Vec3& center, float size,
+                     const Vec3& inner, const Vec3& outer) {
+    float d = length(p - center);
+    float storm = 1.0f - smoothstep(0.08f * size, 0.22f * size, d + 0.04f * noise.fbm(p * 12.0f, 2));
+    float swirl = 0.5f + 0.5f * std::sin(d * 60.0f / size - std::atan2(p.z - center.z, p.x - center.x) * 2.0f);
+    return lerp(c, lerp(inner, outer, swirl), storm);
+}
+
+void bakeJupiter(PlanetTextures& tex, unsigned seed, int size) {
+    Noise noise(seed);
+    const GasPalette pal{{0.45f, 0.28f, 0.18f}, {0.70f, 0.40f, 0.24f}, {0.84f, 0.66f, 0.45f}, {0.95f, 0.88f, 0.72f}};
+    const Vec3 spot = normalize(Vec3{0.7f, -0.35f, 0.6f}); // Gran Mancha Roja, en el hemisferio sur
+    tex.color.bake(size, [&](const Vec3& p) {
+        Vec3 c = gasBands(noise, p, pal, 15.0f, 1.0f);
+        return gasStorm(noise, p, c, spot, 1.0f, Vec3{0.75f, 0.30f, 0.18f}, Vec3{0.95f, 0.65f, 0.45f});
     });
 }
 
-// ---------------------------------------------------------------- Ignis
+// ---------------------------------------------------------------- Saturno
+
+void bakeAurelia(PlanetTextures& tex, unsigned seed, int size) {
+    Noise noise(seed);
+    const GasPalette pal{{0.70f, 0.58f, 0.40f}, {0.82f, 0.70f, 0.50f}, {0.90f, 0.80f, 0.60f}, {0.97f, 0.91f, 0.74f}};
+    tex.color.bake(size, [&](const Vec3& p) { return gasBands(noise, p, pal, 22.0f, 0.7f); });
+}
+
+// ---------------------------------------------------------------- Neptuno
+
+void bakeNeptune(PlanetTextures& tex, unsigned seed, int size) {
+    Noise noise(seed);
+    const GasPalette pal{{0.10f, 0.20f, 0.62f}, {0.16f, 0.32f, 0.78f}, {0.24f, 0.44f, 0.88f}, {0.42f, 0.62f, 0.96f}};
+    const Vec3 spot = normalize(Vec3{-0.6f, -0.3f, 0.75f}); // Gran Mancha Oscura
+    tex.color.bake(size, [&](const Vec3& p) {
+        Vec3 c = gasBands(noise, p, pal, 11.0f, 0.5f);
+        // Nubes altas blancas, sueltas y alargadas, como cirros.
+        float cirrus = smoothstep(0.25f, 0.45f, noise.fbm(Vec3{p.x * 3.0f, p.y * 14.0f, p.z * 3.0f}, 4));
+        c = lerp(c, Vec3{0.92f, 0.95f, 1.0f}, cirrus * 0.7f);
+        return gasStorm(noise, p, c, spot, 0.8f, Vec3{0.04f, 0.08f, 0.30f}, Vec3{0.10f, 0.18f, 0.50f});
+    });
+}
+
+// ---------------------------------------------------------------- Mercurio
 
 static float ignisBase(const Noise& noise, const Vec3& p) { return noise.fbm(p * 2.5f, 5); }
 

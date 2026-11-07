@@ -6,20 +6,23 @@ abre la ventana, lee el teclado y muestra el framebuffer que calcula el programa
 
 ![Vista inicial con los planetas, sus órbitas y el HUD](docs/capturas/01_inicio.png)
 
-El sistema tiene un sol animado y cinco planetas con identidad propia que orbitan y giran según el
-tiempo transcurrido:
+El sistema tiene un sol animado y los ocho planetas del sistema solar, en su orden real, cada uno
+con identidad propia. Orbitan y giran según el tiempo transcurrido:
 
-| Planeta | Superficie | Objetos encima |
-|---|---|---|
-| **Duna** | Desierto craterizado, con dunas en las tierras bajas y **geometría deformada con ruido** | Rocas y balizas con luz |
-| **Glacia** | Placas de hielo con grietas que brillan de noche | Cristales que brotan en las grietas |
-| **Vergel** | Continentes, océanos, montañas nevadas y **nubes animadas** | Bosques de árboles alienígenas y rocas |
-| **Aurelia** | Gigante gaseoso con bandas que giran a distinta velocidad, una gran tormenta y **anillos** | — (es de gas) |
-| **Ignis** | Planeta volcánico junto al sol, con ríos y lagos de **lava que brilla** | Rocas sobre el basalto |
+| # | Planeta | Superficie | Objetos encima |
+|---|---|---|---|
+| 1 | **Mercurio** | Planeta volcánico junto al sol, con ríos y lagos de **lava que brilla** | Rocas sobre el basalto |
+| 2 | **Venus** | Desierto craterizado, con dunas en las tierras bajas y **geometría deformada con ruido** | Rocas y balizas con luz |
+| 3 | **Tierra** | Continentes, océanos, montañas nevadas y **nubes animadas** | Bosques de árboles alienígenas y rocas |
+| 4 | **Marte** | Óxido rojo con regiones oscuras, cráteres, casquetes polares de hielo y un gran cañón | Rocas y balizas |
+| 5 | **Júpiter** | El gigante más grande: bandas cafés y crema muy marcadas y la **Gran Mancha Roja** | — (es de gas) |
+| 6 | **Saturno** | Gigante gaseoso de bandas pálidas que giran a distinta velocidad y **anillos** | — (es de gas) |
+| 7 | **Urano** | Placas de hielo con grietas que brillan de noche; gira **acostado** (eje a 98°) con un anillo delgado | Cristales que brotan en las grietas |
+| 8 | **Neptuno** | Gigante azul con nubes altas blancas y una **mancha oscura** | — (es de gas) |
 
-Las órbitas siguen la **tercera ley de Kepler** (el periodo crece con el radio a la 1.5): Ignis, el
-más cercano al sol, da una vuelta en ~35 s y Aurelia, el más lejano, en ~430 s. Entre Glacia y
-Vergel hay un **cinturón de asteroides**: el carro puede chocar las rocas, que salen disparadas y,
+Las órbitas siguen la **tercera ley de Kepler** (el periodo crece con el radio a la 1.5): Mercurio, el
+más cercano al sol, da una vuelta en ~35 s y Neptuno, el más lejano, en ~20 min. Entre Marte y
+Júpiter hay un **cinturón de asteroides**: el carro puede chocar las rocas, que salen disparadas y,
 si llegan a un planeta o al sol, **explotan**.
 
 De fondo hay un universo generado por procedimiento: la **Vía Láctea**, **nebulosas** de colores,
@@ -46,11 +49,11 @@ Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
 
 | | |
 |---|---|
-| ![Duna](docs/capturas/02_duna.png) | ![Glacia](docs/capturas/03_glacia.png) |
-| ![Vergel](docs/capturas/04_vergel.png) | ![Sol animado](docs/capturas/05_sol.png) |
-| ![Aurelia y sus anillos](docs/capturas/08_aurelia.png) | ![Ignis](docs/capturas/09_ignis.png) |
+| ![Venus](docs/capturas/02_duna.png) | ![Urano](docs/capturas/03_glacia.png) |
+| ![Tierra](docs/capturas/04_vergel.png) | ![Sol animado](docs/capturas/05_sol.png) |
+| ![Saturno y sus anillos](docs/capturas/08_aurelia.png) | ![Mercurio](docs/capturas/09_ignis.png) |
 | ![Vista general: el sol, las órbitas y el cinturón de asteroides](docs/capturas/11_orbitas.png) | ![Boost saliendo de los escapes del Fennec](docs/capturas/10_boost.png) |
-| ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | ![Explosión de un asteroide al chocar con Duna](docs/capturas/12_explosion.png) |
+| ![Trayectoria prevista por la gravedad](docs/capturas/06_gravedad.png) | ![Explosión de un asteroide al chocar con Venus](docs/capturas/12_explosion.png) |
 | ![Fondo: nebulosa, Vía Láctea y una galaxia espiral](docs/capturas/13_universo.png) | ![Agujero negro con disco de acreción y lente gravitacional](docs/capturas/14_agujero_negro.png) |
 | ![Universo alterno: Albor y Arena](docs/capturas/15_universo_alterno.png) | ![Mundo abierto de Arena](docs/capturas/16_mundo_abierto.png) |
 | ![Arena: un balón de Rocket League gigante hecho de cubos](docs/capturas/19_arena_balon.png) | ![Saque en el estadio con el balón de Rocket League](docs/capturas/18_estadio.png) |
@@ -138,10 +141,10 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | Opción | Qué hace |
 |---|---|
 | `--seed N` | Semilla para repartir los objetos de superficie (por defecto 2026) |
-| `--near N` | Empieza frente al lado de día del cuerpo N (1 = Duna, 2 = Glacia, 3 = Vergel, 4 = Aurelia, 5 = Ignis) |
+| `--near N` | Empieza frente al lado de día del cuerpo N (1 = Mercurio, 2 = Venus, 3 = Tierra, 4 = Marte, 5 = Júpiter, 6 = Saturno, 7 = Urano, 8 = Neptuno) |
 | `--hide-help` | Empieza sin el panel de controles |
-| `--flat` | Duna sin deformar (esfera), para comparar |
-| `--test-impact` | Lanza un asteroide hacia Duna (para ver la explosión) |
+| `--flat` | Venus sin deformar (esfera), para comparar |
+| `--test-impact` | Lanza un asteroide hacia Venus (para ver la explosión) |
 | `--test-hit` | Pone un asteroide quieto delante del carro (para chocarlo) |
 | `--near-dist D` | Con `--near`: empieza a D unidades del planeta, apuntando a donde estará (para probar choques en picada) |
 | `--no-opt` | Sin descarte de objetos ni LOD, para comparar contadores |
@@ -177,7 +180,7 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `V` | Activar o desactivar la gravedad |
 | `T` | Mostrar u ocultar las líneas de las órbitas de los planetas |
 | `Y` | Mostrar u ocultar los puntos de la trayectoria prevista del carro |
-| `G` | Duna deformada o como esfera lisa |
+| `G` | Venus deformada o como esfera lisa |
 | `M` | Activar o desactivar los mapas de normales del carro |
 | `N` | Nueva semilla para los objetos de superficie |
 | `O` | Activar o desactivar el descarte de objetos |
@@ -275,11 +278,11 @@ Duración sugerida: unos 2 minutos. Todo ocurre en la misma escena.
 
 | Tiempo | Qué hacer | Qué se muestra |
 |---|---|---|
-| 0:00–0:15 | Arrancar el programa y leer la ayuda (`H` la oculta) | Sistema solar: sol, Glacia, Duna y Vergel con sus etiquetas |
+| 0:00–0:15 | Arrancar el programa y leer la ayuda (`H` la oculta) | Sistema solar: Venus de frente, la Tierra y Marte a los lados y Júpiter y Neptuno al fondo, con sus etiquetas |
 | 0:15–0:35 | `W`, girar con `A`/`D`, subir y bajar con `↑`/`↓`, usar `Shift` | Vuelo espacial, aceleración progresiva y boost |
-| 0:35–0:45 | Pasar cerca de Duna sin acelerar; pulsar `V` dos veces | La trayectoria prevista se curva por la gravedad |
-| 0:45–1:10 | Acercarse a Duna con `W` hasta que se encienda el cuadro verde | Acercamiento, modo superficie, cráteres, rocas y balizas |
-| 1:10–1:25 | Mantener `W` y girar un poco con `A`/`D` | **Vuelta completa alrededor de Duna** (~8 s por vuelta) |
+| 0:35–0:45 | Pasar cerca de Venus sin acelerar; pulsar `V` dos veces | La trayectoria prevista se curva por la gravedad |
+| 0:45–1:10 | Acercarse a Venus con `W` hasta que se encienda el cuadro verde | Acercamiento, modo superficie, cráteres, rocas y balizas |
+| 1:10–1:25 | Mantener `W` y girar un poco con `A`/`D` | **Vuelta completa alrededor de Venus** (~8 s por vuelta) |
 | 1:25–1:35 | Pulsar `G` dos veces y `N` una vez | Deformación de la geometría y cambio de semilla |
 | 1:35–1:50 | Mantener `↑` hasta salir del modo superficie y luego `Shift` | **Alejamiento**: el planeta vuelve a verse como un cuerpo del sistema |
 | 1:50–2:00 | Pulsar `O` y `L` mirando los contadores | El descarte de objetos y el LOD cambian el trabajo del renderizador |
@@ -298,10 +301,10 @@ Agujero negro y minijuegos (después del recorrido anterior):
 | Bajar a Entrenamiento hasta tocar el suelo y cruzar el anillo dorado | Su mundo abierto: carrera de anillos con reloj y mejor tiempo, y tiros de práctica en el estadio |
 | Subir hasta *Regreso* (o `J`) y entrar | Vuelta al sistema solar normal |
 
-Opcional: pasar por el cinturón de asteroides (entre Glacia y Vergel) y chocar rocas con boost
-hacia un planeta para ver la explosión. Visitar los demás planetas. En Glacia las grietas brillan más en el lado de noche, en
-Vergel se mueven las nubes, en Aurelia las bandas se deslizan entre sí y la sombra del planeta cruza
-los anillos, y en Ignis la lava late con pulsos de calor.
+Opcional: pasar por el cinturón de asteroides (entre Marte y Júpiter) y chocar rocas con boost
+hacia un planeta para ver la explosión. Visitar los demás planetas. En Urano las grietas brillan más en el lado de noche, en
+la Tierra se mueven las nubes, en Júpiter, Saturno y Neptuno las bandas se deslizan entre sí, la
+sombra de Saturno cruza sus anillos, y en Mercurio la lava late con pulsos de calor.
 
 ---
 
@@ -325,7 +328,7 @@ src/
   mesh.*, geometry.*  Mallas, icosfera por subdivisión, deformación de esferas y anillos
   noise.*             Ruido Perlin, fbm y celular (Worley)
   cubemap.h           Texturas en cubo (horneado en paralelo y lectura bilineal)
-  planets.*           Superficies generadas del sol y de los cinco planetas
+  planets.*           Superficies generadas del sol y de los ocho planetas
   props.*             Modelos de superficie y su distribución con ruido
   scene.*             Sol, planetas (órbitas, giro, LOD), estrellas y objetos de superficie
   ship.*              Física del carro: control, modo superficie, gravedad, colisión
@@ -383,10 +386,11 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 | Shader | Efecto | Técnica |
 |---|---|---|
 | `sunShader` (**animado**) | Plasma que hierve | Gránulos de ruido celular; cada zona late con un seno desfasado según el tiempo (`u.time`); manchas solares, oscurecimiento del borde y paleta de rojo a blanco |
-| `duneShader` | Desierto con relieve | Color y normal leídos de un cubemap que gira con el planeta; línea día/noche suave, luz de relleno nocturna y bruma de atmósfera |
+| `duneShader` | Desierto con relieve (Venus y Marte) | Color y normal leídos de un cubemap que gira con el planeta; línea día/noche suave, luz de relleno nocturna y bruma de atmósfera |
 | `glaciaShader` | Hielo | Especular muy concentrado (Blinn-Phong), borde Fresnel azulado y grietas emisivas que brillan más de noche |
 | `vergelShader` | Planeta vivo | El sol solo se refleja en el agua (máscara), nubes que se desplazan con una rotación que cambia con el tiempo y atmósfera azul |
-| `aureliaShader` | Gigante gaseoso | **Rotación diferencial**: la textura se lee girada según la latitud y el tiempo, así las bandas se deslizan; borde oscurecido y bruma |
+| `aureliaShader` | Gigante gaseoso (Júpiter y Saturno) | **Rotación diferencial**: la textura se lee girada según la latitud y el tiempo, así las bandas se deslizan; borde oscurecido y bruma cálida |
+| `neptuneShader` | Gigante de hielo (Neptuno) | La misma rotación diferencial, con bruma azul en el borde |
 | `ringShader` | Anillos | Vetas finas según la distancia al centro, luz por las dos caras y **sombra del planeta** (rayo hacia el sol contra su esfera) |
 | `ignisShader` | Volcánico | Roca con relieve y lava emisiva con pulsos de calor que avanzan con el tiempo |
 | `carShader` | Carro | Blinn-Phong con los materiales del modelo, **mapeo de normales en espacio tangente** (chasis, rines y llantas), borde Fresnel y faros emisivos |
@@ -432,7 +436,7 @@ Cada shader es una función que recibe el fragmento interpolado y devuelve su co
 
 ### Cinturón de asteroides ([asteroids.cpp](src/asteroids.cpp))
 
-- **220 rocas** repartidas con una semilla fija entre los radios 262 y 302, cada una con su órbita
+- **300 rocas** repartidas con una semilla fija entre los radios 385 y 425 (entre Marte y Júpiter), cada una con su órbita
   (Kepler, igual que los planetas), una altura sobre el plano y un giro propio alrededor de un eje
   al azar (matriz de rotación de Rodrigues).
 - **Choque con el carro:** esfera contra esfera. La roca sale con la velocidad con que el carro se
@@ -666,13 +670,13 @@ del terreno.
 
 | Característica | Pts | Dónde verla | Implementación |
 |---|---|---|---|
-| Planetas distinguibles (Duna, Glacia, Vergel, Aurelia, Ignis) que orbitan, giran y se pueden ver de cerca | 50 | Desde el inicio se ven cuatro; `--near 1` a `--near 5` | `scene.cpp`, `planets.cpp` |
+| Planetas distinguibles (los ocho del sistema solar, de Mercurio a Neptuno) que orbitan, giran y se pueden ver de cerca | 50 | Desde el inicio se ven cinco; `--near 1` a `--near 8` | `scene.cpp`, `planets.cpp` |
 | 4 tipos de modelo propio en la superficie: roca, árbol alienígena, cristal, baliza | 20 | Acercarse a cada planeta | `props.cpp` (`makeRock`, `makeAlienTree`...) |
 | Distribución procedural reproducible con ruido y semilla | 10 | Tecla `N` / `--seed N` (la misma semilla da la misma imagen) | `props.cpp` `scatterProps`, `scene.cpp` `buildProps` |
 | Posición y orientación correctas sobre la superficie curva mientras el planeta gira | 5 | Los objetos acompañan el giro (los árboles siguen sobre los continentes) | `props.cpp` `mergeProps`, `scene.cpp` `frameMatrix` |
-| Shaders propios con efecto distinto | 24 | Sol, Duna, Glacia, Vergel, Aurelia, anillos, Ignis (también carro y objetos) | `shaders.cpp` |
-| Shader animado | 8 | El sol hierve; las nubes de Vergel se mueven | `sunShader`, `vergelShader` |
-| Deformación de la geometría de un planeta con ruido | 10 | Silueta de Duna; tecla `G` para comparar | `geometry.cpp` `displaceSphere`, `scene.cpp` `duneShape` |
+| Shaders propios con efecto distinto | 24 | Sol, Venus y Marte, Urano, Tierra, Júpiter y Saturno, Neptuno, anillos, Mercurio (también carro y objetos) | `shaders.cpp` |
+| Shader animado | 8 | El sol hierve; las nubes de Tierra se mueven | `sunShader`, `vergelShader` |
+| Deformación de la geometría de un planeta con ruido | 10 | Silueta de Venus; tecla `G` para comparar | `geometry.cpp` `displaceSphere`, `scene.cpp` `duneShape` |
 | Generación procedural de geometría antes de rasterizar | 10 | Todas las esferas son icosaedros subdivididos | `geometry.cpp` `makeIcosphere` |
 | Modo de control local para rodear un planeta | 8 | Cuadro verde; `W` da la vuelta sola; `F` | `ship.cpp` (modo superficie) |
 | Aceleración, frenado y giro progresivos, iguales en cualquier equipo | 8 | `galaxia.exe --dt-test` | `ship.cpp` (paso fijo de 1/120 s) |
@@ -712,7 +716,7 @@ altura del terreno) que gira con el planeta.
   pulgas ni escorpiones. Infierno tiene un solo mapa y una sola arma, y no se puede mirar hacia
   arriba o abajo (los demonios están siempre a la altura del jugador).
 - El modelo del carro no es de autoría propia (ver *Recursos externos*).
-- Los objetos de superficie y los anillos de Aurelia no tienen colisión (el carro los puede atravesar).
+- Los objetos de superficie y los anillos de Saturno y Urano no tienen colisión (el carro los puede atravesar).
 - Los asteroides no chocan entre sí y las explosiones no dejan cráteres en los planetas.
 - No hay sombras proyectadas entre objetos; solo la sombra del planeta sobre sus objetos.
 - La gravedad del sol es suave a propósito, para que el carro detenido no se vaya cayendo.
