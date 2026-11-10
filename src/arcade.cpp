@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <map>
 #include <random>
+#include "audio.h"
 #include "font.h"
 #include "hud.h"
 #include "mesh_builder.h"
@@ -220,6 +221,14 @@ void PacmanGame::onCenter(Mover& m, bool isPac, int ghostIndex) {
                     }
             }
             bool dot = c == '.';
+            if (dot) {
+                // "Waka": los puntos alternan entre dos tonos.
+                static bool high = false;
+                high = !high;
+                audio::play(audio::Sfx::Dot, 1.0f, high ? 1.15f : 0.9f);
+            } else {
+                audio::play(audio::Sfx::PowerUp);
+            }
             c = '_';
             if (dot) rebuildDots();
         }
@@ -372,10 +381,12 @@ void PacmanGame::stepGhosts(float dt, Particles& particles) {
             g.frightened = false;
             combo++;
             points += 200 << (combo - 1);
+            audio::play(audio::Sfx::Pickup, 1.0f, 0.7f + 0.15f * combo); // comerse un fantasma
             particles.burst(world(g.m.x, g.m.y, 0.4f), Vec3{0, 0, 0}, 30, 1.0f, 4.0f, 1.5f, 0.2f, 0.5f);
         } else {
             phase = Phase::Dying;
             phaseTimer = 1.6f;
+            audio::play(audio::Sfx::Die);
             particles.burst(world(pac.x, pac.y, 0.4f), Vec3{0, 0, 0}, 60, 1.0f, 5.0f, 2.0f, 0.3f, 0.8f);
             return;
         }
@@ -600,6 +611,8 @@ void GalagaGame::killPlayer(Particles& particles) {
     alive = false;
     lives--;
     respawn = 2.0f;
+    audio::play(audio::Sfx::Hit, 1.0f, 0.6f); // la nave explota
+    audio::play(audio::Sfx::Die, 0.8f);
     particles.burst(Vec3{playerX, 0.3f, PLAYER_Z}, Vec3{0, 0, 0}, 90, 1.0f, 7.0f, 2.5f, 0.4f, 1.0f);
     shots.erase(std::remove_if(shots.begin(), shots.end(), [](const Shot& s) { return s.enemy; }), shots.end());
 }
@@ -635,6 +648,7 @@ void GalagaGame::update(const ShipInput& in, float dt, Particles& particles) {
         if (in.brake && fireCooldown <= 0.0f && mine < 2 && phase != Phase::Ready) {
             shots.push_back(Shot{Vec3{playerX, 0.0f, PLAYER_Z - 1.0f}, Vec3{0.0f, 0.0f, -34.0f}, false});
             fireCooldown = 0.2f;
+            audio::play(audio::Sfx::Laser);
         }
     } else {
         respawn -= dt;
@@ -727,7 +741,11 @@ void GalagaGame::update(const ShipInput& in, float dt, Particles& particles) {
                 if (dx * dx + dz * dz > 0.95f * 0.95f) continue;
                 remove = true;
                 e.hits++;
-                if (e.type == 2 && e.hits < 2) break; // el jefe aguanta un disparo
+                if (e.type == 2 && e.hits < 2) { // el jefe aguanta un disparo
+                    audio::play(audio::Sfx::Bump, 0.5f, 1.8f);
+                    break;
+                }
+                audio::play(audio::Sfx::Hit);
                 const int base[3] = {50, 80, 150};
                 bool diving = e.state == EnemyState::Diving;
                 points += base[e.type] * (diving ? (e.type == 2 ? 3 : 2) : 1);
@@ -998,6 +1016,7 @@ void CentipedeGame::update(const ShipInput& in, float dt, Particles& particles) 
         shotAlive = true;
         shotX = px;
         shotY = py - 0.5f;
+        audio::play(audio::Sfx::Laser, 0.6f, 1.3f);
     }
 
     // Disparo: sube rapido; se revisa en pasos cortos para no saltarse nada.
@@ -1013,6 +1032,7 @@ void CentipedeGame::update(const ShipInput& in, float dt, Particles& particles) 
             if (cy >= 0 && cy < ROWS && cx >= 0 && cx < COLS && mushrooms[cy][cx] > 0) {
                 mushrooms[cy][cx]--;
                 points += mushrooms[cy][cx] == 0 ? 1 : 0;
+                audio::play(audio::Sfx::Hit, 0.3f, 1.8f); // hongo
                 shotAlive = false;
                 break;
             }
@@ -1023,6 +1043,7 @@ void CentipedeGame::update(const ShipInput& in, float dt, Particles& particles) 
                 // El segmento se vuelve hongo y el de atras pasa a ser cabeza.
                 s.alive = false;
                 points += s.head ? 100 : 10;
+                audio::play(audio::Sfx::Hit, 0.8f, s.head ? 0.85f : 1.1f);
                 Vec3 p = segmentPos(s);
                 int mx = (int)std::lround(p.x + 10.0f), my = (int)std::lround(p.z + 11.5f);
                 if (mx >= 0 && mx < COLS && my >= 0 && my < ROWS) mushrooms[my][mx] = 4;
@@ -1033,6 +1054,7 @@ void CentipedeGame::update(const ShipInput& in, float dt, Particles& particles) 
             }
             if (shotAlive && spiderAlive && length(world(spiderX, spiderY, 0.0f) - sp) < 0.8f) {
                 points += 600;
+                audio::play(audio::Sfx::Hit, 1.0f, 0.7f);
                 spiderAlive = false;
                 spiderTimer = 5.0f;
                 particles.burst(world(spiderX, spiderY, 0.3f), Vec3{0, 0, 0}, 40, 1.0f, 5.0f, 1.6f, 0.3f, 0.7f);
@@ -1087,6 +1109,7 @@ void CentipedeGame::update(const ShipInput& in, float dt, Particles& particles) 
         lives--;
         phase = Phase::Dying;
         phaseTimer = 1.5f;
+        audio::play(audio::Sfx::Die);
         particles.burst(me + Vec3{0.0f, 0.3f, 0.0f}, Vec3{0, 0, 0}, 70, 1.0f, 6.0f, 2.0f, 0.4f, 0.9f);
     }
     best = std::max(best, points);
@@ -1266,6 +1289,8 @@ void SnakeGame::update(const ShipInput& in, float dt, Particles& particles) {
         for (size_t i = 0; i < check && !dead; ++i) dead = body[i].x == head.x && body[i].y == head.y;
         if (dead) {
             phase = Phase::GameOver;
+            audio::play(audio::Sfx::Bump, 0.8f); // choca con la pared o con su cuerpo
+            audio::play(audio::Sfx::Die);
             particles.burst(world((float)body[0].x, (float)body[0].y, 0.4f), Vec3{0, 0, 0}, 70, 1.0f, 6.0f, 2.0f, 0.4f, 0.9f);
             return;
         }
@@ -1278,6 +1303,7 @@ void SnakeGame::update(const ShipInput& in, float dt, Particles& particles) {
         if (head.x == fruit.x && head.y == fruit.y) {
             points += 10;
             grow += 3;
+            audio::play(audio::Sfx::Pickup); // fruta
             interval = std::max(0.06f, interval * 0.95f);
             particles.burst(world((float)fruit.x, (float)fruit.y, 0.4f), Vec3{0, 0, 0}, 25, 1.0f, 4.0f, 1.2f, 0.2f, 0.5f);
             placeFruit();
@@ -1641,8 +1667,11 @@ void InfiernoGame::hurtPlayer(float amount) {
     if (phase == Phase::GameOver) return;
     health -= amount;
     hurtFlash = std::min(1.0f, hurtFlash + amount / 20.0f);
+    // Golpes (bolas de fuego, zarpazos); la lava quema poco a poco y no se oye a cada cuadro.
+    if (amount >= 5.0f) audio::play(audio::Sfx::Hurt);
     if (health <= 0.0f) {
         health = 0.0f;
+        audio::play(audio::Sfx::Die);
         phase = Phase::GameOver;
         best = std::max(best, points);
     }
@@ -1673,6 +1702,7 @@ void InfiernoGame::spawnDemon(Particles& particles) {
 void InfiernoGame::shoot(Particles& particles) {
     ammo--;
     fireCooldown = 0.3f;
+    audio::play(audio::Sfx::Plasma);
     muzzle = 0.07f;
     recoil = 1.0f;
     Vec3 f = forward();
@@ -1701,6 +1731,7 @@ void InfiernoGame::shoot(Particles& particles) {
     }
     hit->hp -= 1.0f;
     hit->hurt = 0.12f;
+    audio::play(audio::Sfx::Hit, hit->hp <= 0.0f ? 1.0f : 0.5f, hit->hp <= 0.0f ? 0.6f : 1.2f);
     particles.burst(point, Vec3{0, 0, 0}, 16, 0.5f, 2.5f, 0.6f, 0.15f, 0.35f);
     if (hit->hp <= 0.0f) {
         hit->dying = 0.001f;
@@ -1749,9 +1780,11 @@ void InfiernoGame::update(const ShipInput& in, float dt, Particles& particles) {
         if (p.kind == 'H' && health < 100.0f) {
             health = std::min(100.0f, health + 25.0f);
             p.respawn = 20.0f;
+            audio::play(audio::Sfx::Pickup, 1.0f, 0.8f); // botiquin
         } else if (p.kind == 'A' && ammo < 99) {
             ammo = std::min(99, ammo + 12);
             p.respawn = 20.0f;
+            audio::play(audio::Sfx::Pickup, 1.0f, 1.2f); // carga de plasma
         }
     }
 

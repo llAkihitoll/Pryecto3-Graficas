@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <random>
+#include "audio.h"
 #include "boost_flame.h"
 #include "font.h"
 #include "geometry.h"
@@ -730,6 +731,9 @@ void OpenWorld::driveCar(GroundCar& c, const ShipInput& in, float h) {
     if (c.onGround) {
         c.position.y = ground; // pegado al terreno
     } else if (c.position.y <= ground) { // aterrizo
+        // Golpe de la suspension, mas fuerte cuanto mas rapido cae.
+        if (&c == &car && c.airTime > 0.25f)
+            audio::play(audio::Sfx::Touchdown, clampf(0.3f - c.velocity.y / 12.0f, 0.3f, 1.0f));
         c.position.y = ground;
         c.velocity.y = 0.0f;
         c.onGround = true;
@@ -737,7 +741,11 @@ void OpenWorld::driveCar(GroundCar& c, const ShipInput& in, float h) {
         c.flipTime = -1.0f;
         c.canFlip = false;
     }
+    Vec3 beforeWalls = c.velocity;
     collideWalls(c.position, CAR_WALL_R, c.velocity, false, 0.1f);
+    // Choque contra una pared o las gradas: suena segun la velocidad que perdio.
+    float lost = length(beforeWalls - c.velocity);
+    if (&c == &car && lost > 4.0f) audio::play(audio::Sfx::Bump, std::min(1.0f, lost / 18.0f));
     // Borde del mundo.
     if (std::fabs(c.position.x) > WORLD_LIMIT) {
         c.position.x = clampf(c.position.x, -WORLD_LIMIT, WORLD_LIMIT);
@@ -799,6 +807,9 @@ void OpenWorld::hitBall(const GroundCar& c) {
         ballVel += m * 1.5f;
         if (c.flipTime >= 0.0f && c.flipTime < 0.4f) ballVel += c.flipDir * 7.0f + WORLD_UP * 1.5f;
         touches++;
+        // Mas fuerte cuanto mas rapido le pega; el rival se oye un poco mas lejos.
+        float volume = clampf(-rel / 15.0f, 0.25f, 1.0f) * (&c == &car ? 1.0f : 0.6f);
+        if (-rel > 1.0f) audio::play(audio::Sfx::BallHit, volume);
     }
 }
 
@@ -852,6 +863,7 @@ void OpenWorld::collideCars() {
     rival.position -= flat(n * push);
     float rel = dot(car.velocity - rival.velocity, n);
     if (rel < 0.0f) {
+        if (rel < -2.0f) audio::play(audio::Sfx::Bump, std::min(1.0f, -rel / 15.0f)); // choque con el rival
         float j = -1.3f * rel * 0.5f;
         car.velocity += n * j;
         rival.velocity -= n * j;
@@ -865,6 +877,7 @@ void OpenWorld::takePads(GroundCar& c) {
         if (dx * dx + dz * dz < 1.6f * 1.6f && c.boost < 100.0f) {
             c.boost = 100.0f;
             p.cooldown = 10.0f;
+            if (&c == &car) audio::play(audio::Sfx::Pickup, 0.8f, 0.85f);
         }
     }
 }
@@ -878,6 +891,7 @@ void OpenWorld::scoreGoal(bool blueScored, Particles& particles) {
     particles.burst(ballPos, Vec3{0, 0, 0}, 320, 4.0f, 20.0f, 4.0f, 0.8f, 2.0f);
     phase = Phase::Goal;
     phaseTimer = 3.0f;
+    audio::play(audio::Sfx::Goal);
     std::printf("%s  azul %d - %d naranja\n", blueScored ? "Gol azul" : "Gol naranja", blue, orange);
 }
 
@@ -895,6 +909,9 @@ void OpenWorld::checkGates() {
         raceTimer = 0.0f;
     }
     nextGate++;
+    // Cada anillo suena un poco mas agudo; el ultimo, con el barrido especial.
+    if (nextGate < (int)gates.size()) audio::play(audio::Sfx::Pickup, 0.9f, 1.0f + 0.04f * nextGate);
+    else audio::play(audio::Sfx::PowerUp);
     if (nextGate == (int)gates.size()) {
         raceLast = raceTimer;
         if (raceBest <= 0.0f || raceLast < raceBest) raceBest = raceLast;
@@ -921,6 +938,7 @@ void OpenWorld::step(const ShipInput& input, float h, Particles& particles) {
             particles.burst(ballPos, Vec3{0, 0, 0}, 320, 4.0f, 20.0f, 4.0f, 0.8f, 2.0f);
             phase = Phase::Goal;
             phaseTimer = 1.5f;
+            audio::play(audio::Sfx::Goal);
             std::printf("Gol de practica %d\n", shots);
         }
         return;

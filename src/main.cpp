@@ -21,6 +21,7 @@
 #include "particles.h"
 #include "openworld.h"
 #include "arcade.h"
+#include "audio.h"
 
 // Resolucion interna del framebuffer. La ventana es mas grande y SDL solo
 // estira la imagen ya terminada al mostrarla.
@@ -299,6 +300,7 @@ int main(int argc, char* argv[]) {
     //   --kickoff                 con --arena: empieza en el saque, dentro del estadio
     //   --training                empieza en el mundo abierto de Entrenamiento
     //   --pacman / --galaga / --centipede / --snake / --infierno   empieza en el juego de ese planeta
+    //   --mute                    sin sonido
     const char* screenshotPath = nullptr;
     float elapsed = 0.0f, lookYawDeg = 0.0f, lookPitchDeg = 0.0f, zoom = 0.0f;
     std::string flightScript;
@@ -312,6 +314,7 @@ int main(int argc, char* argv[]) {
     bool showOrbits = true;     // tecla T: lineas de las orbitas de los planetas
     bool showTrajectory = true; // tecla Y: puntos de la trayectoria prevista del carro
     bool noNormalMap = false;
+    bool mute = false;
     bool startAlt = false, startAtHole = false, startArena = false, startKickoff = false, startTraining = false;
     int startArcade = 0; // planeta del juego con que se empieza (ALT_PACMAN...), 0 = ninguno
     Optimizations opt;
@@ -344,6 +347,7 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(argv[i], "--centipede") == 0) { startAlt = true; startArcade = ALT_CENTIPEDE; }
         else if (std::strcmp(argv[i], "--snake") == 0) { startAlt = true; startArcade = ALT_SNAKE; }
         else if (std::strcmp(argv[i], "--infierno") == 0) { startAlt = true; startArcade = ALT_DEMON; }
+        else if (std::strcmp(argv[i], "--mute") == 0) mute = true;
     }
 
     // Construir la escena incluye hornear las superficies del sol y Venus.
@@ -402,6 +406,9 @@ int main(int argc, char* argv[]) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
+    // Sonido (sintetizado por codigo). En las capturas de prueba no hace falta;
+    // si no hay salida de audio el juego sigue sin sonido.
+    if (!screenshotPath && !mute) audio::init();
 
     Mesh carFull, carLod;
     if (!loadCar("assets/models/fennec.obj", carFull) || !loadCar("assets/models/fennec_lod.obj", carLod)) {
@@ -463,15 +470,24 @@ int main(int argc, char* argv[]) {
                 Vec3 bodyVel = colliders[ship.crashBody].velocity;
                 particles.burst(ship.crashPoint, bodyVel, 20, 0.0f, 2.0f, 30.0f, 0.2f, 0.4f);    // fogonazo
                 particles.burst(ship.crashPoint, bodyVel, 220, 4.0f, 14.0f, 9.0f, 1.0f, 2.0f);  // fuego y humo
+                audio::play(audio::Sfx::Crash);
                 crashShown = true;
                 respawnTimer = RESPAWN_DELAY;
             }
             respawnTimer -= step;
         } else if (scene == &homeScene) {
-            belt.collideShip(ship);
+            if (belt.collideShip(ship) > 0) audio::play(audio::Sfx::Bump, 0.8f, 0.9f); // golpe a un asteroide
         }
+        // Golpe contra un planeta sin explotar (rebote).
+        if (!ship.crashed && ship.impact > 4.0f) audio::play(audio::Sfx::Bump, std::min(1.0f, ship.impact / 15.0f), 0.8f);
+        ship.impact = 0.0f;
         // El cinturon de asteroides es del universo normal.
-        if (scene == &homeScene) belt.update(elapsed, step, colliders, particles);
+        if (scene == &homeScene) {
+            int explosionsBefore = belt.explosions();
+            belt.update(elapsed, step, colliders, particles);
+            // Un asteroide golpeado choco con un planeta: explosion mas chica.
+            if (belt.explosions() > explosionsBefore) audio::play(audio::Sfx::Crash, 0.35f, 1.3f);
+        }
         if (ship.boosting && !ship.crashed) {
             Mat4 carMatrix = ship.modelMatrix();
             for (int i = 0; i < 2; ++i) {
@@ -580,6 +596,7 @@ int main(int argc, char* argv[]) {
         landTimer = LAND_TIME;
         landSwapped = false;
         landing = false;
+        audio::play(audio::Sfx::TakeOff);
     };
     auto updateLanding = [&](float step) {
         if (landTimer <= 0.0f) {
@@ -591,6 +608,7 @@ int main(int argc, char* argv[]) {
                 landTimer = LAND_TIME;
                 landSwapped = false;
                 landing = true;
+                audio::play(audio::Sfx::Landing);
                 worldBody = ship.nearest;
                 world = worldBody == ALT_TRAINING ? &trainingWorld : &arenaWorld;
             }
@@ -836,6 +854,7 @@ int main(int argc, char* argv[]) {
                             camera.snapTo(ship);
                         }
                         break;
+                    case SDLK_k: audio::toggleMute(); break;
                     case SDLK_p:
                         if (fb.savePNG("captura.png")) std::printf("Captura guardada en captura.png\n");
                         break;
@@ -850,6 +869,18 @@ int main(int argc, char* argv[]) {
             else if (arcade) addGamepadArcade(pad, lastInput);
             else addGamepad(pad, lastInput);
             simulate(lastInput, dt, looking, mouseDx, mouseDy, true);
+            // Motor y boost: en el espacio, el carro; en los mundos abiertos, el
+            // carro en el suelo; en los juegos de arcade no hay carro.
+            float throttle = std::fabs(lastInput.throttle);
+            if (arcade) {
+                audio::setCar(false, 0.0f, 0.0f, false);
+            } else if (inOpenWorld) {
+                const GroundCar& c = world->player();
+                audio::setCar(true, length(c.velocity) / c.maxBoost, throttle, c.boosting);
+            } else {
+                audio::setCar(!ship.crashed, std::fabs(ship.forwardSpeed()) / ship.tuning.maxBoostSpeed, throttle,
+                              ship.boosting);
+            }
         }
 
         u.time = elapsed;
@@ -1075,6 +1106,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (pad) SDL_GameControllerClose(pad);
+    audio::shutdown();
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

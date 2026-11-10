@@ -23,6 +23,7 @@ add_executable(galaxia
     src/alternate.cpp
     src/arcade.cpp
     src/asteroids.cpp
+    src/audio.cpp
     src/blackhole.cpp
     src/boost_flame.cpp
     src/camera.cpp

@@ -89,6 +89,8 @@ Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
   ([src/props.cpp](src/props.cpp)).
 - **Texturas de los planetas y del sol:** generadas por procedimiento con ruido propio al arrancar.
   No se usan imágenes externas.
+- **Sonidos:** sintetizados por código al arrancar ([src/audio.cpp](src/audio.cpp)). No se usan
+  archivos de audio externos.
 - **Base de código:** el framebuffer, la exportación a PNG y la idea del rasterizado por funciones
   de arista vienen del laboratorio 4 del curso.
 - **Asistencia de IA:** se usó Claude Code (Anthropic) como asistente de programación durante el
@@ -98,8 +100,8 @@ Otro agujero negro, *Regreso*, encima de Albor, lleva de vuelta a casa.
 ## Tecnologías
 
 - **C++17**, compilado con GCC (MSYS2 UCRT64) en modo Release.
-- **SDL2**: solo para la ventana, la entrada de teclado y ratón, y copiar el framebuffer a la
-  pantalla. No se usan sus funciones de dibujo.
+- **SDL2**: solo para la ventana, la entrada de teclado y ratón, copiar el framebuffer a la
+  pantalla y abrir la salida de audio. No se usan sus funciones de dibujo ni de carga de sonidos.
 - **CMake + Ninja** para compilar.
 - **zlib**, solo para descomprimir los datos de los PNG de los mapas de normales del carro. El resto
   del lector de PNG (bloques del archivo y filtros de cada fila) es propio ([src/texture.cpp](src/texture.cpp)).
@@ -161,6 +163,7 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `--pacman` / `--galaga` / `--centipede` / `--snake` / `--infierno` | Empieza en el juego de ese planeta (`--alt --near 4` a `--near 8`: cerca del planeta) |
 | `--look yaw pitch` | Gira la cámara alrededor del carro (grados) en la captura |
 | `--zoom D` | Distancia de la cámara al carro en la captura |
+| `--mute` | Empieza sin sonido (en el modo de captura nunca hay sonido) |
 
 ---
 
@@ -190,6 +193,7 @@ Al arrancar tarda unos **3.5 segundos** en generar las superficies del sol, los 
 | `J` | Ir junto al agujero negro del universo actual (para no tener que volar hasta él) |
 | `R` | Volver al punto de inicio (también reaparece al instante si el carro explotó) |
 | `P` | Guardar una captura en `captura.png` |
+| `K` | Silenciar o activar el sonido (en todos los modos) |
 | `Esc` | Salir |
 
 En los **mundos abiertos** de Arena y Entrenamiento los controles son los de Rocket League:
@@ -337,6 +341,7 @@ src/
   skybox.*            Fondo del universo: Vía Láctea, nebulosas y galaxias (cubemap horneado)
   boost_flame.*       Llama de cohete del boost (escapes del Fennec)
   particles.*         Partículas de fuego y humo (estela del boost y explosiones)
+  audio.*             Sonido sintetizado: motor, boost, aterrizajes, choques, disparos y objetos
   asteroids.*         Cinturón de asteroides: órbitas, choques con el carro y explosiones
   blackhole.*         Agujero negro: horizonte, disco de acreción y lente gravitacional
   alternate.cpp       Universo alterno: Albor, Arena, Entrenamiento, su cielo y su decoración
@@ -378,6 +383,34 @@ src/
 - **Paralelismo:** primero se preparan todos los triángulos en paralelo y luego cada franja
   horizontal de 16 filas se rasteriza en un hilo distinto. Dos hilos nunca escriben el mismo píxel,
   y la imagen es idéntica byte por byte a la versión de un solo hilo.
+
+### Sonido ([audio.cpp](src/audio.cpp))
+
+No hay archivos de audio: cada efecto se **sintetiza muestra por muestra** al arrancar con
+osciladores (seno, cuadrada, sierra, triángulo), ruido blanco y filtros pasa-bajos de un polo, con
+envolventes exponenciales y barridos de frecuencia. SDL2 solo abre la salida (44.1 kHz, mono) y
+llama a una función que mezcla los sonidos activos (hasta 24 a la vez) con una saturación suave
+(`tanh`) para que no truenen al juntarse.
+
+| Sonido | Cuándo suena | Cómo se genera |
+|---|---|---|
+| **Motor** (continuo) | Siempre que se maneja el carro, en el espacio y en los mundos abiertos | Sierra + subarmónica cuadrada; el tono sube con la velocidad y el filtro se abre con el acelerador |
+| **Boost** (continuo) | Mientras sale fuego de los escapes | Ruido pasabanda (rugido de cohete) con un retumbo grave; entra rápido y se apaga suave |
+| **Aterrizaje / despegue** | Al tocar un planeta del universo alterno / con `U` | Ráfaga de aire que baja de tono y golpe grave / ruido que sube con un zumbido que acelera |
+| **Caída al suelo** | El carro cae después de saltar (más fuerte cuanto más rápido cae) | Golpe sordo de suspensión |
+| **Explosión** | El carro choca con el sol o un planeta; un asteroide golpeado explota | Chasquido, ruido cuyo filtro se cierra y estruendo grave |
+| **Choque con un objeto** | Asteroides, rebotes contra planetas, el rival, paredes del estadio | Golpe metálico con tonos no armónicos |
+| **Golpe al balón** | El carro o el rival tocan el balón (según la fuerza) | "Pum" hueco con un chasquido |
+| **Disparos** | Galaga y Centipede (láser), Infierno (plasma) | Onda cuadrada que cae de tono / sierra con golpe de retroceso |
+| **Enemigo alcanzado** | Un disparo le da a un enemigo, a un hongo o a un demonio | Explosión chica de 8 bits |
+| **Obtener un objeto** | Frutas, botiquines, cargas de plasma, pads de boost, anillos, fantasmas | Arpegio de tres notas (La, Do#, Mi) |
+| **Objeto especial** | Píldora de poder, último anillo de la carrera | Barrido que sube con vibrato |
+| **Puntos de Pac-Man** | Cada punto (alterna dos tonos, como el "waka") | Blip de triángulo |
+| **Perder / daño / gol** | Muerte en los arcades, golpes en Infierno, goles | Tono que cae ondulando / gruñido / explosión con acorde mayor |
+
+Los efectos que pasan en la simulación del carro (choques contra planetas) se leen en
+[main.cpp](src/main.cpp) desde un campo del carro, y no dentro de la física, para que la
+predicción de la trayectoria (que simula copias del carro) no haga ruido.
 
 ### Shaders de fragmentos ([shaders.cpp](src/shaders.cpp))
 

@@ -110,6 +110,9 @@ struct Ship {
     bool crashed = false;
     int crashBody = -1;   // indice del cuerpo con el que choco
     Vec3 crashPoint;      // punto de la superficie donde choco
+    // Rapidez del golpe mas fuerte contra un cuerpo sin explotar (para el
+    // sonido del choque). main.cpp la lee y la vuelve a poner en 0.
+    float impact = 0.0f;
 
     // Gravedad: deriva que acumulan las atracciones de los cuerpos. Va aparte
     // de "velocity" porque el agarre alinearia esa velocidad con el frente

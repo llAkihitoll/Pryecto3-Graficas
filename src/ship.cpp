@@ -262,6 +262,7 @@ void Ship::collide(const std::vector<SphereCollider>& bodies) {
             velocity = gravityVelocity = Vec3{0, 0, 0};
             return;
         }
+        this->impact = std::max(this->impact, impact); // golpe sin explotar (para el sonido)
         position = b.center + n * minDist;
         float into = dot(velocity, n);
         if (into < 0) velocity -= n * (into * (1.0f + tuning.bounce));
