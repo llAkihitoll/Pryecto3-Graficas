@@ -6,6 +6,12 @@ abre la ventana, lee el teclado y muestra el framebuffer que calcula el programa
 
 ![Vista inicial con los planetas, sus órbitas y el HUD](docs/capturas/01_inicio.png)
 
+## Video de demostración
+
+[![Video de demostración de Galaxia Fennec](https://img.youtube.com/vi/fs1CQRU6UJs/hqdefault.jpg)](https://youtu.be/fs1CQRU6UJs)
+
+Ver en YouTube: https://youtu.be/fs1CQRU6UJs
+
 El sistema tiene un sol animado y los ocho planetas del sistema solar, en su orden real, cada uno
 con identidad propia. Orbitan y giran según el tiempo transcurrido:
 
